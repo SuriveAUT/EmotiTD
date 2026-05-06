@@ -1,0 +1,602 @@
+import { Container, FederatedPointerEvent, FederatedWheelEvent, Graphics, Rectangle } from 'pixi.js';
+import {
+  CANVAS,
+  COLORS,
+  EMOTION_COLOR,
+  EMOTION_LABEL,
+  TOWER_STATS,
+  TOWER_UPGRADES,
+  UPGRADE_PATHS,
+  ENEMY_STATS,
+  ENEMY_TRAITS,
+  type SynergyDef,
+  type TowerStats
+} from '../game/config';
+import { EmotionType, EnemyKind, TARGETING_LABEL, TARGETING_MODES, type TargetingMode, type UpgradePath } from '../game/types';
+import type { Tower } from '../game/Tower';
+import type { RunSummary } from '../game/RunStats';
+import type { WaveDef } from '../game/WaveManager';
+import { makeLabel, makeText, makeHeadline } from './text';
+
+const PANEL_X = CANVAS.width - CANVAS.rightPanelWidth;
+const PANEL_W = CANVAS.rightPanelWidth;
+const PANEL_Y = CANVAS.hudHeight;
+const PANEL_H = CANVAS.height - CANVAS.hudHeight;
+const UPGRADE_BUTTON_H = 72;
+const SCROLL_PAD_TOP = 8;
+const SCROLL_PAD_BOTTOM = 12;
+const VIEWPORT_H = PANEL_H - SCROLL_PAD_TOP - SCROLL_PAD_BOTTOM;
+
+export interface SidePanelCallbacks {
+  onUpgrade(path: UpgradePath): void;
+  onTargetingChange(mode: TargetingMode): void;
+  onSell(): void;
+}
+
+export class SidePanel {
+  readonly container: Container;
+  private bg: Graphics;
+  private body: Container;
+  private scrollMask: Graphics;
+  private scrollBar: Graphics;
+  private callbacks: SidePanelCallbacks;
+  private activeSynergies: SynergyDef[] = [];
+  private scrollY = 0;
+  private contentHeight = 0;
+
+  constructor(callbacks: SidePanelCallbacks) {
+    this.callbacks = callbacks;
+    this.container = new Container();
+    this.container.label = 'side-panel';
+    this.bg = new Graphics();
+    this.body = new Container();
+    this.body.label = 'side-panel-body';
+    this.scrollMask = new Graphics();
+    this.scrollBar = new Graphics();
+
+    this.container.addChild(this.bg, this.scrollMask, this.body, this.scrollBar);
+    this.drawBg();
+    this.drawScrollMask();
+
+    /* mask the scrollable body to the panel viewport */
+    this.body.mask = this.scrollMask;
+
+    /* wheel handling — federated events bubble from children */
+    this.container.eventMode = 'static';
+    this.container.hitArea = new Rectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
+    this.container.on('wheel', (e: FederatedWheelEvent) => {
+      const px = e.global.x;
+      const py = e.global.y;
+      if (px < PANEL_X || px > PANEL_X + PANEL_W || py < PANEL_Y || py > PANEL_Y + PANEL_H) return;
+      e.preventDefault?.();
+      e.stopPropagation();
+      this.scrollByDelta(e.deltaY);
+    });
+  }
+
+  private drawBg() {
+    const g = this.bg;
+    g.clear();
+    g.rect(PANEL_X, PANEL_Y, PANEL_W, PANEL_H).fill({ color: COLORS.panel, alpha: 0.96 });
+    g.rect(PANEL_X, PANEL_Y, 1, PANEL_H).fill({ color: COLORS.panelEdge, alpha: 1 });
+    g.rect(PANEL_X + 1, PANEL_Y, 1, PANEL_H).fill({ color: 0x6cf0ff, alpha: 0.14 });
+  }
+
+  private drawScrollMask() {
+    const g = this.scrollMask;
+    g.clear();
+    g.rect(PANEL_X + 2, PANEL_Y + SCROLL_PAD_TOP, PANEL_W - 4, VIEWPORT_H).fill({ color: 0xffffff, alpha: 1 });
+  }
+
+  clear() {
+    this.body.removeChildren();
+    this.scrollY = 0;
+    this.body.y = 0;
+    this.contentHeight = 0;
+    this.scrollBar.clear();
+  }
+
+  setActiveSynergies(synergies: SynergyDef[]) {
+    this.activeSynergies = synergies;
+  }
+
+  showSelectedType(type: EmotionType, affordable: boolean) {
+    this.clear();
+    const stats = TOWER_STATS[type];
+    const c = EMOTION_COLOR[type];
+    const x = PANEL_X + 18;
+    let y = PANEL_Y + 22;
+
+    const head = makeHeadline(EMOTION_LABEL[type], { fontSize: 22, fill: c, letterSpacing: 4 });
+    head.position.set(x, y); this.body.addChild(head);
+    y += 32;
+
+    const sub = makeLabel('PLATZIERUNGSMODUS');
+    sub.position.set(x, y); this.body.addChild(sub);
+    y += 20;
+
+    const help = makeText(affordable ? 'Klicke ein Feld zum Bauen.\nESC oder Rechtsklick = abbrechen.' : 'Nicht genug MEMORY.', {
+      fontSize: 12, fill: affordable ? 0xc0c8d8 : 0xff5577, lineHeight: 16
+    });
+    help.position.set(x, y); this.body.addChild(help);
+    y += 52;
+
+    y = this.appendStats(x, y, type);
+    y = this.appendSynergy(x, y, stats.synergies);
+    y = this.appendActiveSynergies(x, y + 4);
+    this.finalizeLayout(y);
+  }
+
+  showSelectedTower(t: Tower, memory: number) {
+    this.clear();
+    const c = EMOTION_COLOR[t.type];
+    const x = PANEL_X + 18;
+    let y = PANEL_Y + 22;
+
+    const head = makeHeadline(EMOTION_LABEL[t.type] + ' - TURM', { fontSize: 18, fill: c, letterSpacing: 3 });
+    head.position.set(x, y); this.body.addChild(head);
+    y += 28;
+
+    const sub = makeLabel('AUSGEWÄHLT');
+    sub.position.set(x, y); this.body.addChild(sub);
+    y += 20;
+
+    const desc = makeText(TOWER_STATS[t.type].description, { fontSize: 12, fill: 0xc0c8d8, wordWrap: true, wordWrapWidth: PANEL_W - 36, lineHeight: 16 });
+    desc.position.set(x, y); this.body.addChild(desc);
+    y += Math.max(40, (desc.height as number) + 10);
+
+    y = this.appendStats(x, y, t.type, t.getEffectiveStats());
+    y = this.appendSynergy(x, y, TOWER_STATS[t.type].synergies);
+    y = this.appendActiveSynergies(x, y);
+    y += 8;
+    y = this.appendTargetingControls(x, y, t);
+    y = this.appendSellButton(x, y, t);
+    y += 6;
+    y = this.appendUpgrades(x, y, t, memory);
+    this.finalizeLayout(y);
+  }
+
+  showWavePreview(next: WaveDef | null, current: WaveDef | null, between: boolean) {
+    this.clear();
+    const x = PANEL_X + 18;
+    let y = PANEL_Y + 22;
+
+    const head = makeHeadline(between ? 'NÄCHSTE WELLE' : 'AKTUELLE WELLE', { fontSize: 16, fill: 0x6cf0ff, letterSpacing: 4 });
+    head.position.set(x, y); this.body.addChild(head);
+    y += 28;
+
+    const def = between ? next : current;
+    if (!def) {
+      const t = makeText('Kein Wave-Daten', { fontSize: 12, fill: 0x7d8ba6 });
+      t.position.set(x, y); this.body.addChild(t);
+      this.finalizeLayout(y + 20);
+      return;
+    }
+
+    const num = makeHeadline(`#${def.number}${def.isBoss ? '  •  BOSS' : ''}`, {
+      fontSize: 28, fill: def.isBoss ? 0xff5577 : 0xe8edf2, letterSpacing: 2
+    });
+    num.position.set(x, y); this.body.addChild(num);
+    y += 40;
+
+    if (def.isBoss) {
+      const warnBg = new Graphics();
+      warnBg.roundRect(x, y, PANEL_W - 36, 44, 7)
+        .fill({ color: 0x2a1018, alpha: 0.9 })
+        .stroke({ color: 0xff5577, width: 1.5, alpha: 0.9 });
+      const warn = makeText('BOSS WARNING\nSpiral disruption affects all towers.', {
+        fontSize: 11, fill: 0xffd166, fontWeight: '700', lineHeight: 16
+      });
+      warn.position.set(x + 10, y + 6);
+      this.body.addChild(warnBg, warn);
+      y += 56;
+    }
+
+    const composition = aggregateComposition(def);
+    const lbl = makeLabel('GEGNER');
+    lbl.position.set(x, y); this.body.addChild(lbl); y += 20;
+
+    for (const [kind, count] of composition) {
+      y = this.drawEnemyRow(x, y, kind, count);
+    }
+
+    if (def.bonusMemory) {
+      y += 8;
+      const bonus = makeText(`+${def.bonusMemory} BONUS bei Abschluss`, { fontSize: 12, fill: 0xffd166 });
+      bonus.position.set(x, y); this.body.addChild(bonus);
+      y += 26;
+    }
+    y = this.appendActiveSynergies(x, y + 8);
+    this.finalizeLayout(y);
+  }
+
+  showVictory(summary?: RunSummary) {
+    this.clear();
+    const x = PANEL_X + 18;
+    let y = PANEL_Y + 60;
+    const t1 = makeHeadline('SIEG', { fontSize: 36, fill: 0x77ffaa, letterSpacing: 8 });
+    t1.position.set(x, y); this.body.addChild(t1);
+    y += 56;
+    const t2 = makeText('Du hast den Core verteidigt.\nF5 für eine neue Runde.', { fontSize: 13, fill: 0xc0c8d8, lineHeight: 20 });
+    t2.position.set(x, y); this.body.addChild(t2);
+    y += 56;
+    if (summary) {
+      const run = makeText(this.formatRunSummary(summary), { fontSize: 12, fill: 0xc0c8d8, lineHeight: 18 });
+      run.position.set(x, y); this.body.addChild(run);
+      y += (run.height as number) + 10;
+    }
+    this.finalizeLayout(y);
+  }
+
+  showDefeat(wave = 0, summary?: RunSummary) {
+    this.clear();
+    const x = PANEL_X + 18;
+    let y = PANEL_Y + 60;
+    const t1 = makeHeadline('CORE GEBROCHEN', { fontSize: 24, fill: 0xff5577, letterSpacing: 4 });
+    t1.position.set(x, y); this.body.addChild(t1);
+    y += 50;
+    const t2 = makeText(`Die Stille hat dich erreicht.\nErreichte Wave: ${wave}\nRestart für einen neuen Versuch.`, { fontSize: 13, fill: 0xc0c8d8, lineHeight: 20 });
+    t2.position.set(x, y); this.body.addChild(t2);
+    y += (t2.height as number) + 14;
+    if (summary) {
+      const run = makeText(this.formatRunSummary(summary), { fontSize: 12, fill: 0xc0c8d8, lineHeight: 18 });
+      run.position.set(x, y);
+      this.body.addChild(run);
+      y += (run.height as number) + 10;
+    }
+    this.finalizeLayout(y);
+  }
+
+  private formatRunSummary(summary: RunSummary): string {
+    const top = summary.topDamageEmotion
+      ? `${EMOTION_LABEL[summary.topDamageEmotion]} ${Math.round(summary.topDamage)}`
+      : 'NONE';
+    return [
+      `Score: ${summary.score}`,
+      `Kills: ${summary.killsTotal}  Boss: ${summary.bossKills}`,
+      `Damage: ${top}`,
+      `Memory earned: ${summary.memoryEarned}`,
+      `Upgrades: ${summary.upgradesPurchased}  Sold: ${summary.towersSold}`,
+      `Core damage: ${summary.coreDamageTaken}`,
+      `Max resonance: ${summary.maxResonanceTime.toFixed(1)}s`
+    ].join('\n');
+  }
+
+  private appendStats(x: number, y: number, type: EmotionType, stats: TowerStats = TOWER_STATS[type]): number {
+    const rows: [string, string][] = [];
+    rows.push(['KOSTEN', `${TOWER_STATS[type].cost}`]);
+    rows.push(['SCHADEN', `${Math.round(stats.damage)}`]);
+    rows.push(['REICHWEITE', `${Math.round(stats.range)}`]);
+    rows.push(['FEUERRATE', `${stats.fireRate.toFixed(2)}s`]);
+    if (stats.splashRadius) rows.push(['SPLASH', `${Math.round(stats.splashRadius)}`]);
+    if (stats.chainCount)   rows.push(['CHAIN', `${stats.chainCount}`]);
+    if (stats.slowAmount)   rows.push(['SLOW', `${Math.round((1 - stats.slowAmount) * 100)}% / ${stats.slowDuration}s`]);
+    if (stats.fearChance)   rows.push(['STUN', `${Math.round(stats.fearChance * 100)}% / ${stats.stunDuration}s`]);
+    if (stats.buffRadius)   rows.push(['BUFF', `+${Math.round((1 - (stats.buffFireRate ?? 1)) * 100)}% Tempo`]);
+    if (stats.numbDamageMul) rows.push(['NUMB', `x${stats.numbDamageMul.toFixed(2)}`]);
+    if (stats.poisonDps) rows.push(['GIFT', `${stats.poisonDps.toFixed(1)}/s / ${stats.poisonDuration}s`]);
+    if (stats.armorShred) rows.push(['SHRED', `x${stats.armorShred.toFixed(2)} / ${stats.armorShredDuration}s`]);
+    if (stats.guiltMark) rows.push(['MARK', `+${Math.round(stats.guiltMark * 100)}% / hit`]);
+    if (stats.guiltExecuteThreshold) rows.push(['EXECUTE', `${Math.round(stats.guiltExecuteThreshold * 100)}% HP`]);
+    if (stats.coreShield) rows.push(['SHIELD', `+${stats.coreShield.toFixed(2)} Core`]);
+    if (stats.trustAnchorDuration) rows.push(['ANCHOR', `${stats.trustAnchorDuration.toFixed(2)}s`]);
+
+    for (const [k, v] of rows) {
+      const kt = makeLabel(k);
+      kt.position.set(x, y);
+      const vt = makeText(v, { fontSize: 13, fill: 0xe8edf2 });
+      vt.anchor.set(1, 0);
+      vt.position.set(x + (PANEL_W - 36), y - 1);
+      this.body.addChild(kt, vt);
+      y += 18;
+    }
+    return y + 12;
+  }
+
+  private appendSynergy(x: number, y: number, synergies: EmotionType[]): number {
+    const lbl = makeLabel('SYNERGIE');
+    lbl.position.set(x, y); this.body.addChild(lbl);
+    y += 18;
+    let dx = x;
+    for (const s of synergies) {
+      const dot = new Graphics();
+      dot.circle(0, 0, 6).fill({ color: EMOTION_COLOR[s], alpha: 0.95 });
+      dot.position.set(dx + 6, y + 6);
+      this.body.addChild(dot);
+      const t = makeText(EMOTION_LABEL[s], { fontSize: 10, letterSpacing: 1, fill: 0xc0c8d8, fontWeight: '700' });
+      t.position.set(dx + 16, y + 1);
+      this.body.addChild(t);
+      const w = (t.width as number) + 30;
+      dx += w;
+      if (dx > PANEL_X + PANEL_W - 60) { dx = x; y += 18; }
+    }
+    return y + 26;
+  }
+
+  private appendActiveSynergies(x: number, y: number): number {
+    const label = makeLabel('AKTIVE SYNERGIEN');
+    label.position.set(x, y);
+    this.body.addChild(label);
+    y += 18;
+
+    if (this.activeSynergies.length === 0) {
+      const empty = makeText('Keine aktiven Paare.', { fontSize: 11, fill: 0x7d8ba6 });
+      empty.position.set(x, y);
+      this.body.addChild(empty);
+      return y + 22;
+    }
+
+    for (const synergy of this.activeSynergies.slice(0, 6)) {
+      const title = makeText(synergy.label, { fontSize: 11, fill: 0x77ffaa, fontWeight: '700', letterSpacing: 1 });
+      title.position.set(x, y);
+      const desc = makeText(synergy.description, {
+        fontSize: 9,
+        fill: 0x9aa6bd,
+        wordWrap: true,
+        wordWrapWidth: PANEL_W - 36,
+        lineHeight: 12
+      });
+      desc.position.set(x, y + 14);
+      this.body.addChild(title, desc);
+      y += Math.max(34, 18 + (desc.height as number));
+    }
+    return y + 4;
+  }
+
+  private appendUpgrades(x: number, y: number, tower: Tower, memory: number): number {
+    const label = makeLabel('UPGRADES');
+    label.position.set(x, y);
+    this.body.addChild(label);
+    y += 20;
+
+    for (const path of UPGRADE_PATHS) {
+      this.drawUpgradeButton(x, y, tower, path, memory);
+      y += UPGRADE_BUTTON_H + 8;
+    }
+    return y + 4;
+  }
+
+  private appendTargetingControls(x: number, y: number, tower: Tower): number {
+    const label = makeLabel('TARGETING');
+    label.position.set(x, y);
+    this.body.addChild(label);
+    y += 20;
+
+    const current = tower.getTargetingMode();
+    const buttonW = 76;
+    const buttonH = 24;
+    TARGETING_MODES.forEach((mode, index) => {
+      const col = index % 3;
+      const row = Math.floor(index / 3);
+      const btn = new Container();
+      const bg = new Graphics();
+      const active = mode === current;
+      const text = makeText(TARGETING_LABEL[mode], {
+        fontSize: 9,
+        fontWeight: '700',
+        letterSpacing: 1,
+        fill: active ? 0x05070d : 0xe8edf2
+      });
+      const draw = (hovered: boolean): void => {
+        bg.clear();
+        bg.roundRect(0, 0, buttonW, buttonH, 6)
+          .fill({ color: active ? 0x77ffaa : hovered ? 0x1a2238 : 0x0a0f1a, alpha: 0.96 })
+          .stroke({ color: active ? 0x77ffaa : COLORS.panelEdge, width: 1, alpha: hovered || active ? 1 : 0.7 });
+      };
+      draw(false);
+      text.anchor.set(0.5);
+      text.position.set(buttonW / 2, buttonH / 2);
+      btn.position.set(x + col * (buttonW + 6), y + row * (buttonH + 7));
+      btn.eventMode = 'static';
+      btn.cursor = 'pointer';
+      btn.on('pointerover', () => draw(true));
+      btn.on('pointerout', () => draw(false));
+      btn.on('pointerdown', (e: FederatedPointerEvent) => {
+        e.stopPropagation();
+        this.callbacks.onTargetingChange(mode);
+      });
+      btn.addChild(bg, text);
+      this.body.addChild(btn);
+    });
+
+    return y + 2 * (buttonH + 7) + 10;
+  }
+
+  private appendSellButton(x: number, y: number, tower: Tower): number {
+    const refund = tower.sellValue();
+    const btn = new Container();
+    const bg = new Graphics();
+    const text = makeText(`SELL  +${refund} MEMORY`, {
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 2,
+      fill: 0xffd166
+    });
+    const w = PANEL_W - 36;
+    const draw = (hovered: boolean): void => {
+      bg.clear();
+      bg.roundRect(0, 0, w, 34, 7)
+        .fill({ color: hovered ? 0x2a1d12 : 0x0a0f1a, alpha: 0.96 })
+        .stroke({ color: 0xffd166, width: hovered ? 2 : 1, alpha: hovered ? 1 : 0.75 });
+    };
+    draw(false);
+    text.anchor.set(0.5);
+    text.position.set(w / 2, 17);
+    btn.position.set(x, y);
+    btn.eventMode = 'static';
+    btn.cursor = 'pointer';
+    btn.on('pointerover', () => draw(true));
+    btn.on('pointerout', () => draw(false));
+    btn.on('pointerdown', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.callbacks.onSell();
+    });
+    btn.addChild(bg, text);
+    this.body.addChild(btn);
+    return y + 44;
+  }
+
+  private drawUpgradeButton(x: number, y: number, tower: Tower, path: UpgradePath, memory: number) {
+    const def = TOWER_UPGRADES[tower.type][path];
+    const state = tower.getUpgradeState();
+    const active = state.path === path;
+    const locked = state.path !== null && state.path !== path;
+    const nextCost = tower.nextUpgradeCost(path);
+    const maxed = active && nextCost === null;
+    const enabled = tower.canUpgrade(path, memory);
+    const c = EMOTION_COLOR[tower.type];
+    const w = PANEL_W - 36;
+
+    const btn = new Container();
+    btn.position.set(x, y);
+    btn.eventMode = 'static';
+    btn.cursor = enabled ? 'pointer' : 'not-allowed';
+    btn.hitArea = { contains: (px: number, py: number) => px >= 0 && px <= w && py >= 0 && py <= UPGRADE_BUTTON_H } as any;
+
+    const bg = new Graphics();
+    bg.roundRect(0, 0, w, UPGRADE_BUTTON_H, 7).fill({ color: active ? c : 0x0a0f1a, alpha: active ? 0.18 : 0.94 });
+    bg.roundRect(0, 0, w, UPGRADE_BUTTON_H, 7).stroke({
+      color: locked ? COLORS.panelEdge : c,
+      width: active ? 2 : 1,
+      alpha: locked ? 0.7 : enabled ? 0.95 : 0.45
+    });
+    if (!enabled && !maxed) bg.roundRect(0, 0, w, UPGRADE_BUTTON_H, 7).fill({ color: 0x000000, alpha: 0.38 });
+    btn.addChild(bg);
+
+    const title = makeText(`${path}  ${def.title}`, {
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 1,
+      fill: locked ? 0x7d8ba6 : 0xe8edf2
+    });
+    title.position.set(10, 8);
+    btn.addChild(title);
+
+    const role = makeText(def.role, { fontSize: 10, fill: locked ? 0x566178 : 0xc0c8d8, wordWrap: true, wordWrapWidth: w - 20 });
+    role.position.set(10, 26);
+    btn.addChild(role);
+
+    const levelText = `${active ? state.level : 0}/2`;
+    const subText =
+      locked ? 'LOCKED BY OTHER PATH' :
+      maxed ? `LEVEL ${levelText}  -  MAX` :
+      `LEVEL ${levelText}  -  ${nextCost} MEMORY`;
+    const sub = makeText(subText, {
+      fontSize: 10,
+      fontWeight: '700',
+      letterSpacing: 1,
+      fill: enabled ? 0xffd166 : maxed ? 0x77ffaa : 0x7d8ba6
+    });
+    sub.position.set(10, 48);
+    btn.addChild(sub);
+
+    const summary = locked || nextCost === null ? '' : def.levels[state.path === path ? state.level : 0]?.summary ?? '';
+    if (summary) {
+      const s = makeText(summary, { fontSize: 9, fill: 0x7d8ba6 });
+      s.anchor.set(1, 0);
+      s.position.set(w - 10, 49);
+      btn.addChild(s);
+    }
+
+    btn.on('pointerdown', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      if (enabled) this.callbacks.onUpgrade(path);
+    });
+    this.body.addChild(btn);
+  }
+
+  private drawEnemyRow(x: number, y: number, kind: EnemyKind, count: number): number {
+    const stats = ENEMY_STATS[kind];
+    const dot = new Graphics();
+    const colors: Record<EnemyKind, number> = {
+      [EnemyKind.Doubtling]: 0xb070ff,
+      [EnemyKind.PanicRunner]: 0xff5577,
+      [EnemyKind.GuiltGiant]: 0xffd166,
+      [EnemyKind.ShameSwarm]: 0xff77ff,
+      [EnemyKind.EnvyLeech]: 0x77ffaa,
+      [EnemyKind.BurnoutBrute]: 0xff5b3a,
+      [EnemyKind.VoidWraith]: 0xb070ff,
+      [EnemyKind.Overthinker]: 0x6cf0ff,
+      [EnemyKind.NumbOne]: 0x8c95a8,
+      [EnemyKind.Spiral]: 0xff5577
+    };
+    dot.circle(0, 0, 7).fill({ color: colors[kind], alpha: 0.9 });
+    dot.position.set(x + 7, y + 9);
+    this.body.addChild(dot);
+
+    const name = makeText(stats.label, { fontSize: 12, fill: 0xe8edf2, fontWeight: '700' });
+    name.position.set(x + 22, y);
+    this.body.addChild(name);
+
+    const sub = makeText(`HP ${stats.hp}  •  Speed ${stats.speed}`, { fontSize: 9, letterSpacing: 1, fill: 0x7d8ba6 });
+    sub.position.set(x + 22, y + 14);
+    this.body.addChild(sub);
+
+    const cnt = makeText(`×${count}`, { fontSize: 14, fontWeight: '700', fill: 0x6cf0ff });
+    cnt.anchor.set(1, 0);
+    cnt.position.set(PANEL_X + PANEL_W - 18, y + 1);
+    this.body.addChild(cnt);
+
+    y += 32;
+    for (const trait of ENEMY_TRAITS[kind]) {
+      const t = makeText(`- ${trait}`, {
+        fontSize: 9,
+        fill: 0x9aa6bd,
+        wordWrap: true,
+        wordWrapWidth: PANEL_W - 56,
+        lineHeight: 12
+      });
+      t.position.set(x + 22, y);
+      this.body.addChild(t);
+      y += Math.max(12, t.height as number) + 2;
+    }
+    return y + 8;
+  }
+
+  /* ----------------------------- scrolling ----------------------------- */
+
+  private finalizeLayout(maxAbsoluteY: number): void {
+    // Convert "absolute Y reached" to "content height inside the viewport".
+    const used = Math.max(0, maxAbsoluteY - PANEL_Y - SCROLL_PAD_TOP);
+    this.contentHeight = used;
+    this.applyScrollClamp();
+    this.drawScrollBar();
+  }
+
+  private scrollByDelta(deltaY: number): void {
+    if (this.contentHeight <= VIEWPORT_H) return;
+    this.scrollY += deltaY * 0.5;
+    this.applyScrollClamp();
+    this.drawScrollBar();
+  }
+
+  private applyScrollClamp(): void {
+    const max = Math.max(0, this.contentHeight - VIEWPORT_H);
+    if (this.scrollY < 0) this.scrollY = 0;
+    else if (this.scrollY > max) this.scrollY = max;
+    this.body.y = -this.scrollY;
+  }
+
+  private drawScrollBar(): void {
+    const g = this.scrollBar;
+    g.clear();
+    if (this.contentHeight <= VIEWPORT_H) return;
+    const trackX = PANEL_X + PANEL_W - 5;
+    const trackY = PANEL_Y + SCROLL_PAD_TOP;
+    const trackH = VIEWPORT_H;
+    const thumbH = Math.max(34, (VIEWPORT_H / this.contentHeight) * trackH);
+    const max = this.contentHeight - VIEWPORT_H;
+    const t = max > 0 ? this.scrollY / max : 0;
+    const thumbY = trackY + (trackH - thumbH) * t;
+    g.roundRect(trackX, trackY, 2, trackH, 1).fill({ color: COLORS.panelEdge, alpha: 0.55 });
+    g.roundRect(trackX - 1, thumbY, 4, thumbH, 2).fill({ color: 0x6cf0ff, alpha: 0.9 });
+  }
+
+  static readonly width = PANEL_W;
+}
+
+function aggregateComposition(def: WaveDef): [EnemyKind, number][] {
+  const map = new Map<EnemyKind, number>();
+  for (const g of def.groups) map.set(g.kind, (map.get(g.kind) ?? 0) + g.count);
+  return [...map.entries()].sort((a, b) => b[1] - a[1]);
+}

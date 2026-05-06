@@ -1,0 +1,21 @@
+{
+  "name": "emoticore-td",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "EMOTICORE TD — emotional tower defense in WebGL",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pixi-filters": "^6.0.5",
+    "pixi.js": "^8.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}

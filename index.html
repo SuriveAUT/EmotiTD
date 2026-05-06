@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#05070d" />
+    <title>EMOTICORE TD</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg-deep: #02030a;
+        --bg-mid: #060a18;
+        --neon-pink: #ff5577;
+        --neon-cyan: #6cf0ff;
+        --neon-yellow: #ffd166;
+      }
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body {
+        margin: 0; padding: 0;
+        background: var(--bg-deep);
+        color: #e8edf2;
+        overflow: hidden;
+        font-family: 'Inter', system-ui, -apple-system, Segoe UI, sans-serif;
+        height: 100%;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      /* atmospheric background — the "frame" outside the canvas */
+      body::before {
+        content: '';
+        position: fixed; inset: 0;
+        background:
+          radial-gradient(ellipse 80% 60% at 18% 20%, rgba(255, 85, 119, 0.10), transparent 70%),
+          radial-gradient(ellipse 70% 55% at 82% 78%, rgba(108, 240, 255, 0.10), transparent 70%),
+          radial-gradient(ellipse 60% 80% at 50% 50%, rgba(176, 112, 255, 0.06), transparent 70%),
+          linear-gradient(180deg, #050810 0%, #02030a 100%);
+        pointer-events: none;
+        z-index: 0;
+      }
+      body::after {
+        content: '';
+        position: fixed; inset: 0;
+        background-image:
+          linear-gradient(rgba(108, 240, 255, 0.04) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(108, 240, 255, 0.04) 1px, transparent 1px);
+        background-size: 64px 64px;
+        mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, transparent 30%, black 100%);
+        -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 50%, transparent 30%, black 100%);
+        pointer-events: none;
+        z-index: 0;
+      }
+      #app {
+        position: fixed; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        z-index: 1;
+      }
+      canvas {
+        display: block;
+        touch-action: none;
+        outline: none;
+        border-radius: 4px;
+        box-shadow:
+          0 0 0 1px rgba(108, 240, 255, 0.12),
+          0 0 60px rgba(108, 240, 255, 0.06),
+          0 0 120px rgba(255, 85, 119, 0.05),
+          0 24px 64px rgba(0, 0, 0, 0.55);
+      }
+      #boot {
+        position: fixed; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        flex-direction: column; gap: 14px;
+        z-index: 10; pointer-events: none;
+        transition: opacity 700ms ease;
+        background: radial-gradient(ellipse at center, #0a0e18 0%, #03050a 80%);
+      }
+      #boot .title {
+        font-size: 32px; letter-spacing: 8px; font-weight: 800;
+        background: linear-gradient(90deg, #ff5577, #6cf0ff 50%, #d4ff6c);
+        -webkit-background-clip: text; background-clip: text;
+        color: transparent;
+        filter: drop-shadow(0 0 20px rgba(108, 240, 255, 0.4));
+      }
+      #boot .sub {
+        font-size: 11px; opacity: .55; letter-spacing: 6px;
+        color: #6cf0ff;
+      }
+      #boot.gone { opacity: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="boot">
+      <div class="title">EMOTICORE TD</div>
+      <div class="sub">DEFEND&nbsp;&nbsp;THE&nbsp;&nbsp;CORE</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
