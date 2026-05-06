@@ -21,16 +21,16 @@ export interface HUDState {
 }
 
 /* ------------------------------------------------------------------ *
- *  HUD layout — every cell has its own x slot. The cells were tuned
- *  so even the longest possible STATUS string never overlaps the
- *  EMOTIONAL BALANCE column on a 1280-wide canvas.
+ *  HUD layout — every cell sits in its own x slot. Balance value is
+ *  stacked vertically under the dots so it never collides with the
+ *  right-aligned STATUS text on long messages.
  * ------------------------------------------------------------------ */
 const COL = {
   stability: 24,
-  memory: 270,
-  score: 380,
-  wave: 488,
-  balance: 580,
+  memory: 232,
+  score: 332,
+  wave: 432,
+  balance: 512,
   status: CANVAS.width - CANVAS.rightPanelWidth - 16
 } as const;
 
@@ -62,65 +62,65 @@ export class HUD {
 
     /* ------------- Stability ------------- */
     this.stabLabel = makeLabel('CORE STABILITY', { fontSize: 9, letterSpacing: 2 });
-    this.stabLabel.position.set(COL.stability, 12);
+    this.stabLabel.position.set(COL.stability, 10);
     this.container.addChild(this.stabLabel);
 
     this.stabBar = new Graphics();
-    this.stabBar.position.set(COL.stability, 32);
+    this.stabBar.position.set(COL.stability, 30);
     this.container.addChild(this.stabBar);
 
-    this.stabValue = makeHeadline('20/20', { fontSize: 14 });
-    this.stabValue.position.set(COL.stability + 168, 30);
+    this.stabValue = makeHeadline('20/20', { fontSize: 13 });
+    this.stabValue.position.set(COL.stability + 158, 28);
     this.container.addChild(this.stabValue);
 
     /* ------------- Memory ------------- */
     this.memoryLabel = makeLabel('MEMORY', { fontSize: 9, letterSpacing: 2 });
-    this.memoryLabel.position.set(COL.memory, 12);
+    this.memoryLabel.position.set(COL.memory, 10);
     this.container.addChild(this.memoryLabel);
 
     this.memoryValue = makeHeadline(`${ECONOMY.startingMemory}`, { fontSize: 22, fill: 0xffd166 });
-    this.memoryValue.position.set(COL.memory, 26);
+    this.memoryValue.position.set(COL.memory, 24);
     this.container.addChild(this.memoryValue);
 
     /* ------------- Score ------------- */
     this.scoreLabel = makeLabel('SCORE', { fontSize: 9, letterSpacing: 2 });
-    this.scoreLabel.position.set(COL.score, 12);
+    this.scoreLabel.position.set(COL.score, 10);
     this.container.addChild(this.scoreLabel);
 
     this.scoreValue = makeHeadline('0', { fontSize: 18, fill: 0x77ffaa });
-    this.scoreValue.position.set(COL.score, 28);
+    this.scoreValue.position.set(COL.score, 26);
     this.container.addChild(this.scoreValue);
 
     /* ------------- Wave ------------- */
     this.waveLabel = makeLabel('WAVE', { fontSize: 9, letterSpacing: 2 });
-    this.waveLabel.position.set(COL.wave, 12);
+    this.waveLabel.position.set(COL.wave, 10);
     this.container.addChild(this.waveLabel);
 
     this.waveValue = makeHeadline('0', { fontSize: 22, fill: 0x6cf0ff });
-    this.waveValue.position.set(COL.wave, 26);
+    this.waveValue.position.set(COL.wave, 24);
     this.container.addChild(this.waveValue);
 
-    /* ------------- Balance ------------- */
-    this.balanceLabel = makeLabel('EMOTIONAL BALANCE', { fontSize: 9, letterSpacing: 2 });
-    this.balanceLabel.position.set(COL.balance, 12);
+    /* ------------- Balance (label / dots / value stacked) ------------- */
+    this.balanceLabel = makeLabel('EMOTIONAL BALANCE', { fontSize: 10, letterSpacing: 2 });
+    this.balanceLabel.position.set(COL.balance, 8);
     this.container.addChild(this.balanceLabel);
 
     this.balanceDots = new Graphics();
-    this.balanceDots.position.set(COL.balance, 36);
+    this.balanceDots.position.set(COL.balance + 6, 30);
     this.container.addChild(this.balanceDots);
 
     this.balanceValue = makeText('—', { fontSize: 11, fill: 0xe8edf2, letterSpacing: 1, fontWeight: '700' });
-    this.balanceValue.position.set(COL.balance + 188, 32);
+    this.balanceValue.position.set(COL.balance, 46);
     this.container.addChild(this.balanceValue);
 
     /* ------------- Status (right) ------------- */
     this.statusLabel = makeLabel('STATUS', { fontSize: 9, letterSpacing: 2 });
     this.statusLabel.anchor.set(1, 0);
-    this.statusLabel.position.set(COL.status, 12);
+    this.statusLabel.position.set(COL.status, 10);
     this.container.addChild(this.statusLabel);
 
-    this.statusText = makeText('', { fontSize: 12, letterSpacing: 1, fill: 0x6cf0ff, fontWeight: '700' });
-    this.statusText.position.set(0, 30);
+    this.statusText = makeText('', { fontSize: 11, letterSpacing: 1, fill: 0x6cf0ff, fontWeight: '700' });
+    this.statusText.position.set(0, 28);
     this.statusText.anchor.set(1, 0);
     this.statusText.x = COL.status;
     this.container.addChild(this.statusText);
@@ -133,20 +133,19 @@ export class HUD {
       .fill({ color: COLORS.panel, alpha: 0.95 });
     g.rect(0, CANVAS.hudHeight - 1, CANVAS.width, 1)
       .fill({ color: COLORS.panelEdge, alpha: 1 });
-    // accent line
     g.rect(0, CANVAS.hudHeight - 2, CANVAS.width, 1)
       .fill({ color: 0x6cf0ff, alpha: 0.18 });
 
     // subtle column dividers so each cell reads as its own
-    for (const x of [COL.memory - 16, COL.score - 14, COL.wave - 14, COL.balance - 18]) {
-      g.rect(x, 14, 1, CANVAS.hudHeight - 22).fill({ color: COLORS.panelEdge, alpha: 0.55 });
+    for (const x of [COL.memory - 14, COL.score - 12, COL.wave - 12, COL.balance - 14]) {
+      g.rect(x, 12, 1, CANVAS.hudHeight - 20).fill({ color: COLORS.panelEdge, alpha: 0.55 });
     }
   }
 
   update(state: HUDState, balance: EmotionalBalance) {
     /* ----- stability bar ----- */
     const ratio = Math.max(0, state.stability / state.maxStability);
-    const barW = 158, barH = 10;
+    const barW = 148, barH = 10;
     const stabColor =
       ratio > 0.5 ? 0x77ffaa :
       ratio > 0.25 ? 0xffd166 : 0xff5577;
@@ -194,14 +193,14 @@ export class HUD {
       this.statusText.style.fill = 0xff5577;
     } else if (state.betweenWaves) {
       if (state.countdown >= 0) {
-        const prefix = state.autoStartEnabled ? `NEXT WAVE  ${state.countdown.toFixed(1)}s` : 'AUTO START OFF';
+        const prefix = state.autoStartEnabled ? `NEXT WAVE  ${state.countdown.toFixed(1)}s` : 'AUTO OFF';
         this.statusText.text = `${prefix} · SPACE TO START`;
         this.statusText.style.fill = 0x6cf0ff;
       } else {
         this.statusText.text = '';
       }
     } else {
-      this.statusText.text = `WAVE ${state.wave} INCOMING · ${state.speedMultiplier}X`;
+      this.statusText.text = `WAVE ${state.wave} · ${state.speedMultiplier}X`;
       this.statusText.style.fill = 0x6cf0ff;
     }
   }
@@ -213,11 +212,11 @@ export class HUD {
     for (const t of EMOTION_TYPES) {
       const n = balance.counts[t];
       const c = EMOTION_COLOR[t];
-      g.circle(x, 0, 4.5).fill({ color: c, alpha: n > 0 ? 0.95 : 0.18 });
+      g.circle(x, 0, 5.5).fill({ color: c, alpha: n > 0 ? 0.95 : 0.18 });
       if (n > 0) {
-        g.circle(x, 0, 7.5).stroke({ color: c, width: 1, alpha: 0.5 });
+        g.circle(x, 0, 8.5).stroke({ color: c, width: 1, alpha: 0.5 });
       }
-      x += 19;
+      x += 18;
     }
   }
 }

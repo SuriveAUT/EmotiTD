@@ -23,9 +23,9 @@ async function main() {
   const fit = () => {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    // small inset so the canvas never touches the viewport edges,
-    // letting the atmospheric background show as decorative chrome.
-    const inset = Math.min(48, Math.max(12, Math.min(w, h) * 0.025));
+    // tiny inset so the canvas almost fills the viewport while still
+    // showing a thin glow of the atmospheric background as chrome.
+    const inset = Math.min(16, Math.max(4, Math.min(w, h) * 0.008));
     const availableW = Math.max(320, w - inset * 2);
     const availableH = Math.max(240, h - inset * 2);
     const scale = Math.min(availableW / CANVAS.width, availableH / CANVAS.height);

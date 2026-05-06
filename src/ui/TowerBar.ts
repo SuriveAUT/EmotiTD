@@ -174,7 +174,7 @@ export class TowerBar {
     bg.rect(0, 1, CANVAS.width, 1).fill({ color: 0x6cf0ff, alpha: 0.16 });
     this.container.addChild(bg);
 
-    let x = 20;
+    let x = 16;
     const y = (CANVAS.towerBarHeight - BUTTON_H) / 2;
     for (const t of EMOTION_TYPES) {
       const b = new TowerButton(t, () => this.toggle(t));
@@ -184,7 +184,24 @@ export class TowerBar {
       x += BUTTON_W + BUTTON_GAP;
     }
 
-    /* start wave button */
+    /* control buttons — sit between tower bar and start button */
+    this.pauseControl = new ControlButton(60, 'PAUSE', () => this.callbacks.onPauseToggle());
+    this.speedControl = new ControlButton(44, '1X', () => this.callbacks.onSpeedToggle());
+    this.autoControl = new ControlButton(64, 'AUTO ON', () => this.callbacks.onAutoStartToggle());
+    this.restartControl = new ControlButton(64, 'RESTART', () => this.callbacks.onRestart());
+    const cx = 670;
+    this.pauseControl.container.position.set(cx, y + 6);
+    this.speedControl.container.position.set(cx + 66, y + 6);
+    this.autoControl.container.position.set(cx, y + 40);
+    this.restartControl.container.position.set(cx + 70, y + 40);
+    this.container.addChild(
+      this.pauseControl.container,
+      this.speedControl.container,
+      this.autoControl.container,
+      this.restartControl.container
+    );
+
+    /* start wave button — pinned to right edge of tower bar */
     this.startBtn = new Container();
     this.startBtn.eventMode = 'static';
     this.startBtn.cursor = 'pointer';
@@ -199,7 +216,7 @@ export class TowerBar {
     sub.position.set(86, 44);
     sub.alpha = 0.7;
     this.startBtn.addChild(sub);
-    this.startBtn.position.set(CANVAS.width - 192 - CANVAS.rightPanelWidth - 20, y);
+    this.startBtn.position.set(CANVAS.width - CANVAS.rightPanelWidth - 180, y);
     this.drawStartBg(false);
     this.startBtn.on('pointerover', () => this.drawStartBg(true));
     this.startBtn.on('pointerout',  () => this.drawStartBg(false));
@@ -210,22 +227,6 @@ export class TowerBar {
       }
     });
     this.container.addChild(this.startBtn);
-
-    this.pauseControl = new ControlButton(60, 'PAUSE', () => this.callbacks.onPauseToggle());
-    this.speedControl = new ControlButton(44, '1X', () => this.callbacks.onSpeedToggle());
-    this.autoControl = new ControlButton(64, 'AUTO ON', () => this.callbacks.onAutoStartToggle());
-    this.restartControl = new ControlButton(64, 'RESTART', () => this.callbacks.onRestart());
-    const cx = 666;
-    this.pauseControl.container.position.set(cx, y + 6);
-    this.speedControl.container.position.set(cx + 70, y + 6);
-    this.autoControl.container.position.set(cx, y + 40);
-    this.restartControl.container.position.set(cx + 74, y + 40);
-    this.container.addChild(
-      this.pauseControl.container,
-      this.speedControl.container,
-      this.autoControl.container,
-      this.restartControl.container
-    );
   }
 
   private drawStartBg(hover: boolean) {
