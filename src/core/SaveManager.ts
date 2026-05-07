@@ -9,12 +9,21 @@ export interface SaveSettings {
   autoStart: boolean;
 }
 
+export interface ChallengeRecord {
+  bestWave: number;
+  bestScore: number;
+  bestSeed?: string;
+  completedAt?: string;
+}
+
 export interface SaveData {
   version: number;
   bestWave: number;
   bestScore: number;
   tutorialCompleted: boolean;
   settings: SaveSettings;
+  challengeRecords: Record<string, ChallengeRecord>;
+  lastChallengeSeed?: string;
 }
 
 const SAVE_KEY = 'emoticore-td-save';
@@ -25,6 +34,8 @@ const DEFAULT_SAVE_DATA: SaveData = {
   bestWave: 0,
   bestScore: 0,
   tutorialCompleted: false,
+  challengeRecords: {},
+  lastChallengeSeed: undefined,
   settings: {
     musicVolume: 0.8,
     sfxVolume: 0.8,
@@ -85,6 +96,33 @@ export class SaveManager {
     return this.getData();
   }
 
+  recordChallengeRun(mode: string, mapId: string, wave: number, score: number, seed?: string): SaveData {
+    this.recordRun(wave, score);
+    const key = this.challengeKey(mode, mapId);
+    const current = this.data.challengeRecords[key] ?? { bestWave: 0, bestScore: 0 };
+    const normalizedWave = Math.max(0, Math.floor(wave));
+    const normalizedScore = Math.max(0, Math.floor(score));
+    this.data.challengeRecords[key] = {
+      bestWave: Math.max(current.bestWave, normalizedWave),
+      bestScore: Math.max(current.bestScore, normalizedScore),
+      bestSeed: normalizedScore >= current.bestScore ? seed : current.bestSeed,
+      completedAt: normalizedScore >= current.bestScore ? new Date().toISOString() : current.completedAt
+    };
+    if (seed) this.data.lastChallengeSeed = seed;
+    this.save();
+    return this.getData();
+  }
+
+  recordLastChallengeSeed(seed: string): SaveData {
+    this.data.lastChallengeSeed = seed;
+    this.save();
+    return this.getData();
+  }
+
+  getChallengeRecord(mode: string, mapId: string): ChallengeRecord | null {
+    return this.data.challengeRecords[this.challengeKey(mode, mapId)] ?? null;
+  }
+
   completeTutorial(): SaveData {
     this.data.tutorialCompleted = true;
     this.save();
@@ -105,6 +143,8 @@ export class SaveManager {
       tutorialCompleted: typeof data.tutorialCompleted === 'boolean'
         ? data.tutorialCompleted
         : DEFAULT_SAVE_DATA.tutorialCompleted,
+      challengeRecords: this.normalizeChallengeRecords(data.challengeRecords),
+      lastChallengeSeed: typeof data.lastChallengeSeed === 'string' ? data.lastChallengeSeed : DEFAULT_SAVE_DATA.lastChallengeSeed,
       settings: {
         musicVolume: this.clamp01(this.numberOrDefault(settings.musicVolume, DEFAULT_SAVE_DATA.settings.musicVolume)),
         sfxVolume: this.clamp01(this.numberOrDefault(settings.sfxVolume, DEFAULT_SAVE_DATA.settings.sfxVolume)),
@@ -128,6 +168,25 @@ export class SaveManager {
 
   private isQuality(value: unknown): value is QualitySetting {
     return value === 'low' || value === 'medium' || value === 'high';
+  }
+
+  private challengeKey(mode: string, mapId: string): string {
+    return `${mode}:${mapId}`;
+  }
+
+  private normalizeChallengeRecords(value: unknown): Record<string, ChallengeRecord> {
+    if (!value || typeof value !== 'object') return {};
+    const out: Record<string, ChallengeRecord> = {};
+    for (const [key, record] of Object.entries(value as Record<string, Partial<ChallengeRecord>>)) {
+      if (!record || typeof record !== 'object') continue;
+      out[key] = {
+        bestWave: this.numberOrDefault(record.bestWave, 0),
+        bestScore: this.numberOrDefault(record.bestScore, 0),
+        bestSeed: typeof record.bestSeed === 'string' ? record.bestSeed : undefined,
+        completedAt: typeof record.completedAt === 'string' ? record.completedAt : undefined
+      };
+    }
+    return out;
   }
 }
 

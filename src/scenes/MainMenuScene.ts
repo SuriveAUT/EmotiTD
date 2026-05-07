@@ -1,12 +1,22 @@
-import { Application, Container, Graphics, Text } from 'pixi.js';
+import { Application, Container, Graphics, Rectangle, Text } from 'pixi.js';
 import { audioManager } from '../core/AudioManager';
 import type { Scene } from '../core/Scene';
 import type { SceneManager } from '../core/SceneManager';
 import { saveManager, type SaveData } from '../core/SaveManager';
 import { APP_VERSION } from '../core/version';
-import { CANVAS, COLORS, DEFAULT_MAP, EMOTION_COLOR, MAP_LIST, MENU_COPY, type MapDefinition } from '../game/config';
+import { CANVAS, COLORS, DEFAULT_MAP, EMOTION_COLOR, EMOTION_LABEL, MAP_LIST, MAP_MODIFIER_COPY, MENU_COPY, type MapDefinition } from '../game/config';
 import { EmotionType } from '../game/types';
+import {
+  CHALLENGE_MODE_DESCRIPTION,
+  CHALLENGE_MODE_DIFFICULTY,
+  CHALLENGE_MODE_LABEL,
+  createChallengeRunConfig,
+  randomSeed,
+  type RunConfig
+} from '../game/RunConfig';
+import type { GameMode } from '../game/GameMode';
 import { makeHeadline, makeLabel, makeText } from '../ui/text';
+import { UI_THEME } from '../ui/theme';
 import { CreditsScene } from './CreditsScene';
 import { GameScene } from './GameScene';
 import { HowToPlayScene } from './HowToPlayScene';
@@ -35,10 +45,15 @@ export class MainMenuScene implements Scene {
   private readonly particles: MenuParticle[] = [];
 
   private elapsed = 0;
+  private introTime = 0;
   private saveData: SaveData = saveManager.load();
   private selectedMap: MapDefinition = DEFAULT_MAP;
+  private selectedMode: GameMode = 'standard';
+  private challengeSeed = randomSeed();
   private mapButtonDrawers: Array<() => void> = [];
+  private modeButtonDrawers: Array<() => void> = [];
   private bestWaveText: Text | null = null;
+  private modeInfoText: Text | null = null;
   private resetConfirm: Container | null = null;
 
   constructor(app: Application, sceneManager: SceneManager) {
@@ -62,9 +77,15 @@ export class MainMenuScene implements Scene {
 
   update(deltaSeconds: number): void {
     this.elapsed += deltaSeconds;
+    this.introTime += deltaSeconds;
+    const intro = Math.min(1, this.introTime / 0.65);
+    this.uiLayer.alpha = intro;
+    this.uiLayer.y = (1 - intro) * 10;
     this.drawLines();
     this.drawCore();
     this.drawParticles(deltaSeconds);
+    this.refreshMapButtons();
+    this.refreshModeButtons();
   }
 
   destroy(): void {
@@ -74,25 +95,27 @@ export class MainMenuScene implements Scene {
 
   private buildUi(): void {
     const cx = CANVAS.width / 2;
+    const leftX = 405;
+    const rightX = 855;
 
     const title = makeText(MENU_COPY.title, {
-      fontSize: 64,
+      fontSize: 44,
       fontWeight: '900',
-      letterSpacing: 7,
+      letterSpacing: 6,
       fill: COLORS.text,
-      stroke: { color: 0xff5577, width: 3 }
+      stroke: { color: 0xff5577, width: 2 }
     });
     title.anchor.set(0.5);
-    title.position.set(cx, 120);
+    title.position.set(cx, 56);
 
     const subtitle = makeHeadline(MENU_COPY.subtitle, {
-      fontSize: 18,
+      fontSize: 15,
       fontWeight: '600',
       letterSpacing: 2,
       fill: COLORS.pathCore
     });
     subtitle.anchor.set(0.5);
-    subtitle.position.set(cx, 175);
+    subtitle.position.set(cx, 104);
 
     this.bestWaveText = makeLabel('', {
       fontSize: 12,
@@ -100,7 +123,7 @@ export class MainMenuScene implements Scene {
       fill: COLORS.warn
     });
     this.bestWaveText.anchor.set(0.5);
-    this.bestWaveText.position.set(cx, 232);
+    this.bestWaveText.position.set(cx, 144);
     this.refreshBestWave();
 
     const mapLabel = makeLabel(MENU_COPY.selectMap, {
@@ -109,21 +132,48 @@ export class MainMenuScene implements Scene {
       fill: COLORS.textDim
     });
     mapLabel.anchor.set(0.5);
-    mapLabel.position.set(cx, 282);
+    mapLabel.position.set(leftX, 216);
 
     const mapSelector = new Container();
-    mapSelector.position.set(cx, 330);
+    mapSelector.position.set(leftX, 240);
     this.mapButtonDrawers = [];
-    mapSelector.addChild(...MAP_LIST.map((map, index) => this.createMapButton(map, (index - (MAP_LIST.length - 1) / 2) * 240, 0)));
+    mapSelector.addChild(...MAP_LIST.map((map, index) => this.createMapButton(map, 0, index * 100)));
 
-    const buttonStartY = 410;
-    const buttonGap = 64;
+    const modeLabel = makeLabel('SELECT MODE', {
+      fontSize: 10,
+      letterSpacing: 4,
+      fill: COLORS.textDim
+    });
+    modeLabel.anchor.set(0.5);
+    modeLabel.position.set(rightX, 216);
+
+    const modeSelector = new Container();
+    modeSelector.position.set(rightX, 270);
+    this.modeButtonDrawers = [];
+    const modes: GameMode[] = ['standard', 'bossRush', 'limitedEmotions', 'fragileCore', 'resonanceTrial'];
+    modeSelector.addChild(...modes.map((mode, index) => this.createModeButton(mode, (index % 2) * 208 - 104, Math.floor(index / 2) * 64)));
+
+    this.modeInfoText = makeText('', {
+      fontSize: 11,
+      fill: COLORS.textDim,
+      align: 'center',
+      wordWrap: true,
+      wordWrapWidth: 390,
+      lineHeight: 15
+    });
+    this.modeInfoText.anchor.set(0.5, 0);
+    this.modeInfoText.position.set(rightX, 430);
+    this.refreshModeInfo();
+
+    const buttonStartY = 526;
+    const buttonGap = 56;
     const buttons = new Container();
-    buttons.position.set(cx, buttonStartY);
+    buttons.position.set(rightX, buttonStartY);
     buttons.addChild(
       this.createButton(MENU_COPY.startRun, 0, 0 * buttonGap, 0xff5577, () => this.sceneManager.changeScene(new GameScene(this.app, {
-        mode: 'standard',
+        mode: this.selectedMode,
         map: this.selectedMap,
+        runConfig: this.createSelectedRunConfig(),
         onMainMenu: () => this.sceneManager.changeScene(new MainMenuScene(this.app, this.sceneManager))
       }))),
       this.createButton(MENU_COPY.howToPlay, 0, 1 * buttonGap, 0x6cf0ff, () => {
@@ -154,7 +204,7 @@ export class MainMenuScene implements Scene {
     signal.anchor.set(0, 1);
     signal.position.set(26, CANVAS.height - 24);
 
-    this.uiLayer.addChild(title, subtitle, this.bestWaveText, mapLabel, mapSelector, buttons, signal, version);
+    this.uiLayer.addChild(title, subtitle, this.bestWaveText, mapLabel, mapSelector, modeLabel, modeSelector, this.modeInfoText, buttons, signal, version);
   }
 
   private drawStaticBackground(): void {
@@ -170,11 +220,16 @@ export class MainMenuScene implements Scene {
       bg.moveTo(0, y).lineTo(CANVAS.width, y).stroke({ color: COLORS.bgGridStrong, width: 1, alpha });
     }
 
-    bg.rect(0, 0, CANVAS.width, 160).fill({ color: COLORS.bg, alpha: 0.55 });
+    bg.rect(0, 0, CANVAS.width, 168).fill({ color: COLORS.bg, alpha: 0.68 });
     bg.rect(0, CANVAS.height - 150, CANVAS.width, 150).fill({ color: COLORS.bg, alpha: 0.55 });
-    bg.roundRect(220, 70, 840, 690, 10)
-      .fill({ color: COLORS.panel, alpha: 0.34 })
+    bg.roundRect(224, 176, 848, 606, 10)
+      .fill({ color: COLORS.panel, alpha: 0.38 })
       .stroke({ color: COLORS.panelEdge, width: 1, alpha: 0.65 });
+    bg.rect(0, 0, CANVAS.width, 96).fill({ color: 0x000000, alpha: 0.34 });
+    bg.rect(648, 204, 1, 538).fill({ color: COLORS.panelEdge, alpha: 0.3 });
+    bg.rect(0, CANVAS.height - 118, CANVAS.width, 118).fill({ color: 0x000000, alpha: 0.28 });
+    bg.rect(0, 0, 18, CANVAS.height).fill({ color: 0x000000, alpha: 0.38 });
+    bg.rect(CANVAS.width - 18, 0, 18, CANVAS.height).fill({ color: 0x000000, alpha: 0.38 });
     this.backgroundLayer.addChild(bg);
   }
 
@@ -183,7 +238,7 @@ export class MainMenuScene implements Scene {
     this.lines.clear();
 
     const cx = CANVAS.width / 2;
-    const cy = 168;
+    const cy = 208;
     const nodes = [
       { x: 170, y: 178, color: EMOTION_COLOR[EmotionType.Anger] },
       { x: 330, y: 610, color: EMOTION_COLOR[EmotionType.Sadness] },
@@ -199,14 +254,14 @@ export class MainMenuScene implements Scene {
       this.lines.circle(node.x, node.y, 18 + pulse * 8).stroke({ color: node.color, width: 1, alpha: 0.18 });
     }
 
-    this.lines.circle(cx, cy, 170 + pulse * 6).stroke({ color: 0xff5577, width: 1.4, alpha: 0.2 });
-    this.lines.circle(cx, cy, 112 - pulse * 4).stroke({ color: 0x6cf0ff, width: 1, alpha: 0.22 });
+    this.lines.circle(cx, cy, 170 + pulse * 6).stroke({ color: 0xff5577, width: 1.2, alpha: 0.12 });
+    this.lines.circle(cx, cy, 112 - pulse * 4).stroke({ color: 0x6cf0ff, width: 1, alpha: 0.16 });
   }
 
   private drawCore(): void {
     const pulse = (Math.sin(this.elapsed * 2.4) + 1) / 2;
     const cx = CANVAS.width / 2;
-    const cy = 168;
+    const cy = 208;
     this.core.clear();
     this.core.circle(cx, cy, 34 + pulse * 8).fill({ color: 0xff5577, alpha: 0.06 });
     this.core.circle(cx, cy, 20 + pulse * 4).fill({ color: 0x6cf0ff, alpha: 0.08 });
@@ -257,7 +312,7 @@ export class MainMenuScene implements Scene {
   private createButton(label: string, x: number, y: number, color: number, onClick: () => void): Container {
     const button = new Container();
     const width = 380;
-    const height = 54;
+    const height = 50;
     const frame = new Graphics();
     const text = makeHeadline(label, {
       fontSize: 17,
@@ -269,7 +324,7 @@ export class MainMenuScene implements Scene {
     const draw = (hovered: boolean): void => {
       frame.clear();
       frame.roundRect(-width / 2, -height / 2, width, height, 9)
-        .fill({ color: hovered ? color : COLORS.panel, alpha: hovered ? 0.2 : 0.86 })
+        .fill({ color: hovered ? color : UI_THEME.color.panel, alpha: hovered ? 0.2 : 0.88 })
         .stroke({ color, width: hovered ? 3 : 2, alpha: hovered ? 1 : 0.78 });
       frame.rect(-width / 2 + 14, height / 2 - 7, hovered ? width - 28 : width * 0.36, 2)
         .fill({ color, alpha: hovered ? 0.78 : 0.32 });
@@ -281,6 +336,7 @@ export class MainMenuScene implements Scene {
     button.position.set(x, y);
     button.eventMode = 'static';
     button.cursor = 'pointer';
+    button.hitArea = new Rectangle(-width / 2 - 18, -height / 2 - 12, width + 36, height + 24);
     button.on('pointerover', () => {
       button.scale.set(1.025);
       draw(true);
@@ -290,6 +346,9 @@ export class MainMenuScene implements Scene {
       draw(false);
     });
     button.on('pointertap', onClick);
+    button.on('pointerdown', () => button.scale.set(0.985));
+    button.on('pointerup', () => button.scale.set(1.025));
+    button.on('pointerupoutside', () => button.scale.set(1));
     button.on('pointertap', () => audioManager.playSfx('ui-click'));
     button.addChild(frame, text);
     return button;
@@ -297,11 +356,12 @@ export class MainMenuScene implements Scene {
 
   private createMapButton(map: MapDefinition, x: number, y: number): Container {
     const button = new Container();
-    const width = 220;
-    const height = 60;
+    const width = 330;
+    const height = 86;
     const frame = new Graphics();
+    const modifier = MAP_MODIFIER_COPY[map.id];
     const title = makeLabel(map.name.toUpperCase(), {
-      fontSize: 14,
+      fontSize: 13,
       letterSpacing: 2,
       fill: COLORS.text
     });
@@ -310,6 +370,22 @@ export class MainMenuScene implements Scene {
       letterSpacing: 2,
       fill: COLORS.textDim
     });
+    const summary = makeText(modifier?.summary ?? map.theme, {
+      fontSize: 9,
+      fill: COLORS.text,
+      wordWrap: true,
+      wordWrapWidth: width - 80,
+      lineHeight: 12
+    });
+    const mods = makeText((modifier?.modifiers ?? []).join('  /  '), {
+      fontSize: 8,
+      fontWeight: '700',
+      fill: COLORS.warn,
+      wordWrap: true,
+      wordWrapWidth: width - 80,
+      lineHeight: 11
+    });
+    const difficultyDots = new Graphics();
 
     let hoveredState = false;
     const draw = (): void => {
@@ -319,7 +395,7 @@ export class MainMenuScene implements Scene {
       frame.clear();
       frame.roundRect(-width / 2, -height / 2, width, height, 10)
         .fill({
-          color: selected ? accentColor : hovered ? COLORS.bgGridStrong : COLORS.panel,
+          color: selected ? accentColor : hovered ? COLORS.bgGridStrong : UI_THEME.color.panel,
           alpha: selected ? 0.16 : 0.88
         })
         .stroke({
@@ -328,35 +404,126 @@ export class MainMenuScene implements Scene {
           alpha: hovered || selected ? 1 : 0.7
         });
       // selection accent dot
-      frame.circle(-width / 2 + 18, 0, 6)
+      frame.circle(-width / 2 + 20, -22, 6)
         .fill({ color: accentColor, alpha: selected ? 1 : 0.55 })
         .stroke({ color: accentColor, width: 1, alpha: selected ? 0.95 : 0.4 });
+      if (selected) {
+        const pulse = 0.5 + Math.sin(this.elapsed * 3) * 0.5;
+        frame.roundRect(-width / 2 - 3, -height / 2 - 3, width + 6, height + 6, 12)
+          .stroke({ color: accentColor, width: 1, alpha: 0.22 + pulse * 0.28 });
+      }
+      // difficulty pips on the right
+      difficultyDots.clear();
+      const pipRadius = 3;
+      const pipGap = 4;
+      const pipCount = 5;
+      const totalPipW = pipCount * (pipRadius * 2) + (pipCount - 1) * pipGap;
+      const pipStartX = width / 2 - 14 - totalPipW;
+      const pipY = -height / 2 + 14;
+      for (let i = 0; i < pipCount; i++) {
+        const cx = pipStartX + i * (pipRadius * 2 + pipGap) + pipRadius;
+        const lit = i < map.difficulty;
+        difficultyDots.circle(cx, pipY, pipRadius)
+          .fill({ color: lit ? accentColor : COLORS.panelEdge, alpha: lit ? 0.95 : 0.55 });
+        if (lit) {
+          difficultyDots.circle(cx, pipY, pipRadius + 2)
+            .stroke({ color: accentColor, width: 1, alpha: selected ? 0.6 : 0.3 });
+        }
+      }
+      // difficulty label above the pips
       title.style.fill = selected ? accentColor : COLORS.text;
       theme.style.fill = selected ? COLORS.text : COLORS.textDim;
+      summary.style.fill = selected ? COLORS.text : COLORS.textDim;
+      mods.style.fill = selected ? COLORS.warn : 0x9aa6bd;
     };
 
-    title.anchor.set(0.5);
-    title.position.set(14, -10);
-    theme.anchor.set(0.5);
-    theme.position.set(14, 12);
+    title.anchor.set(0, 0.5);
+    title.position.set(-width / 2 + 42, -27);
+    theme.anchor.set(0, 0.5);
+    theme.position.set(-width / 2 + 42, -10);
+    summary.anchor.set(0, 0);
+    summary.position.set(-width / 2 + 42, 4);
+    mods.anchor.set(0, 0);
+    mods.position.set(-width / 2 + 42, 26);
     button.position.set(x, y);
     button.eventMode = 'static';
     button.cursor = 'pointer';
+    button.hitArea = new Rectangle(-width / 2 - 16, -height / 2 - 12, width + 32, height + 24);
     button.on('pointerover', () => { hoveredState = true; draw(); });
     button.on('pointerout', () => { hoveredState = false; draw(); });
     button.on('pointertap', () => {
       this.selectedMap = map;
       audioManager.playSfx('ui-click');
       this.refreshMapButtons();
+      this.refreshBestWave();
     });
     this.mapButtonDrawers.push(draw);
     draw();
-    button.addChild(frame, title, theme);
+    button.addChild(frame, difficultyDots, title, theme, summary, mods);
     return button;
   }
 
   private refreshMapButtons(): void {
     for (const redraw of this.mapButtonDrawers) redraw();
+  }
+
+  private createModeButton(mode: GameMode, x: number, y: number): Container {
+    const button = new Container();
+    const width = 170;
+    const height = 46;
+    const frame = new Graphics();
+    const label = makeLabel(CHALLENGE_MODE_LABEL[mode].toUpperCase(), {
+      fontSize: 9,
+      letterSpacing: 1,
+      fill: COLORS.text
+    });
+
+    let hoveredState = false;
+    const draw = (): void => {
+      const selected = this.selectedMode === mode;
+      frame.clear();
+      frame.roundRect(-width / 2, -height / 2, width, height, 7)
+        .fill({ color: selected ? COLORS.pathCore : hoveredState ? COLORS.bgGridStrong : UI_THEME.color.panel, alpha: selected ? 0.18 : 0.88 })
+        .stroke({ color: selected ? COLORS.pathCore : COLORS.panelEdge, width: selected ? 2 : 1, alpha: selected || hoveredState ? 1 : 0.7 });
+      if (selected) frame.rect(-width / 2 + 10, height / 2 - 4, width - 20, 2).fill({ color: COLORS.pathCore, alpha: 0.86 });
+      label.style.fill = selected ? COLORS.pathCore : COLORS.text;
+    };
+
+    label.anchor.set(0.5);
+    button.position.set(x, y);
+    button.eventMode = 'static';
+    button.cursor = 'pointer';
+    button.hitArea = new Rectangle(-width / 2 - 14, -height / 2 - 10, width + 28, height + 20);
+    button.on('pointerover', () => { hoveredState = true; draw(); });
+    button.on('pointerout', () => { hoveredState = false; draw(); });
+    button.on('pointertap', () => {
+      this.selectedMode = mode;
+      if (mode === 'limitedEmotions') this.challengeSeed = randomSeed();
+      audioManager.playSfx('ui-click');
+      this.refreshModeButtons();
+      this.refreshModeInfo();
+      this.refreshBestWave();
+    });
+    this.modeButtonDrawers.push(draw);
+    draw();
+    button.addChild(frame, label);
+    return button;
+  }
+
+  private refreshModeButtons(): void {
+    for (const redraw of this.modeButtonDrawers) redraw();
+  }
+
+  private createSelectedRunConfig(): RunConfig {
+    return createChallengeRunConfig(this.selectedMode, this.selectedMap.id, this.selectedMode === 'standard' ? 'standard' : this.challengeSeed);
+  }
+
+  private refreshModeInfo(): void {
+    if (!this.modeInfoText) return;
+    const config = this.createSelectedRunConfig();
+    const pool = config.allowedTowers?.map((type) => EMOTION_LABEL[type]).join(', ');
+    const seedLine = this.selectedMode === 'limitedEmotions' ? `Seed ${config.seed}  /  Towers ${pool}` : `Seed ${config.seed}`;
+    this.modeInfoText.text = `${CHALLENGE_MODE_LABEL[this.selectedMode]} - ${CHALLENGE_MODE_DIFFICULTY[this.selectedMode]}\n${CHALLENGE_MODE_DESCRIPTION[this.selectedMode]}\n${config.rules.join(' / ')}  /  ${seedLine}`;
   }
 
   private showResetConfirm(): void {
@@ -422,6 +589,7 @@ export class MainMenuScene implements Scene {
     button.position.set(x, y);
     button.eventMode = 'static';
     button.cursor = 'pointer';
+    button.hitArea = new Rectangle(-88, -28, 176, 56);
     button.on('pointerover', () => draw(true));
     button.on('pointerout', () => draw(false));
     button.on('pointertap', onClick);
@@ -432,6 +600,9 @@ export class MainMenuScene implements Scene {
 
   private refreshBestWave(): void {
     if (!this.bestWaveText) return;
-    this.bestWaveText.text = MENU_COPY.best(this.saveData.bestWave, this.saveData.bestScore);
+    const record = saveManager.getChallengeRecord(this.selectedMode, this.selectedMap.id);
+    this.bestWaveText.text = record
+      ? MENU_COPY.best(record.bestWave, record.bestScore)
+      : MENU_COPY.best(this.saveData.bestWave, this.saveData.bestScore);
   }
 }

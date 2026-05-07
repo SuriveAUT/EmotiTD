@@ -217,13 +217,25 @@ export class Projectile {
 
     // visual hit
     const c = EMOTION_COLOR[this.spec.type];
+    const impact = this.impactProfile();
     particles.burst(this.x, this.y, {
-      count: 5, color: c,
-      speedMin: 45, speedMax: 150,
-      sizeMin: 1, sizeMax: 2.1,
-      lifeMin: 0.14, lifeMax: 0.34,
-      drag: 4
+      count: impact.count, color: c,
+      speedMin: impact.speedMin, speedMax: impact.speedMax,
+      sizeMin: impact.sizeMin, sizeMax: impact.sizeMax,
+      lifeMin: 0.14, lifeMax: impact.lifeMax,
+      drag: 4,
+      shape: impact.shape
     });
+    if (impact.ringRadius > 0) {
+      particles.ring(this.x, this.y, {
+        color: c,
+        startRadius: 3,
+        endRadius: impact.ringRadius,
+        duration: 0.22,
+        thickness: impact.ringThickness,
+        alpha: impact.ringAlpha
+      });
+    }
     if (this.spec.type === EmotionType.Hope && t.kind === EnemyKind.NumbOne) {
       particles.ring(this.x, this.y, {
         color: 0xf7f3a6, startRadius: 3, endRadius: 34,
@@ -303,6 +315,36 @@ export class Projectile {
       ...(this.spec.coreShield !== undefined ? { coreShield: this.spec.coreShield, trustAnchorDuration: this.spec.trustAnchorDuration } : {}),
       ...(this.spec.shameGroupRadius !== undefined ? { shameGroupRadius: this.spec.shameGroupRadius, shameGroupDamageMul: this.spec.shameGroupDamageMul } : {})
     };
+  }
+
+  private impactProfile(): {
+    count: number;
+    speedMin: number;
+    speedMax: number;
+    sizeMin: number;
+    sizeMax: number;
+    lifeMax: number;
+    shape: 'circle' | 'square' | 'spark' | 'shard';
+    ringRadius: number;
+    ringThickness: number;
+    ringAlpha: number;
+  } {
+    switch (this.spec.type) {
+      case EmotionType.Anger:
+        return { count: 10, speedMin: 70, speedMax: 230, sizeMin: 1.2, sizeMax: 2.8, lifeMax: 0.38, shape: 'spark', ringRadius: 34, ringThickness: 2.8, ringAlpha: 0.85 };
+      case EmotionType.Sadness:
+        return { count: 7, speedMin: 35, speedMax: 130, sizeMin: 1, sizeMax: 2.4, lifeMax: 0.36, shape: 'shard', ringRadius: 28, ringThickness: 1.8, ringAlpha: 0.65 };
+      case EmotionType.Joy:
+        return { count: 8, speedMin: 80, speedMax: 220, sizeMin: 0.9, sizeMax: 2.3, lifeMax: 0.28, shape: 'spark', ringRadius: 20, ringThickness: 1.8, ringAlpha: 0.6 };
+      case EmotionType.Fear:
+        return { count: 6, speedMin: 45, speedMax: 160, sizeMin: 1.2, sizeMax: 2.6, lifeMax: 0.3, shape: 'square', ringRadius: 24, ringThickness: 2, ringAlpha: 0.7 };
+      case EmotionType.Disgust:
+        return { count: 7, speedMin: 25, speedMax: 120, sizeMin: 1.3, sizeMax: 3, lifeMax: 0.44, shape: 'circle', ringRadius: 22, ringThickness: 1.7, ringAlpha: 0.55 };
+      case EmotionType.Pride:
+        return { count: 9, speedMin: 90, speedMax: 260, sizeMin: 1, sizeMax: 2.2, lifeMax: 0.26, shape: 'shard', ringRadius: 18, ringThickness: 2.5, ringAlpha: 0.7 };
+      default:
+        return { count: 5, speedMin: 45, speedMax: 150, sizeMin: 1, sizeMax: 2.1, lifeMax: 0.34, shape: 'circle', ringRadius: 14, ringThickness: 1.5, ringAlpha: 0.45 };
+    }
   }
 
   private makeSplashPacket(target: Enemy): DamagePacket {

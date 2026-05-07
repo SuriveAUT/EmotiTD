@@ -3,7 +3,6 @@ import { audioManager } from '../core/AudioManager';
 import type { Scene } from '../core/Scene';
 import type { SceneManager } from '../core/SceneManager';
 import { CANVAS, COLORS, EMOTION_LABEL, HOW_TO_PLAY_COPY, TOWER_STATS } from '../game/config';
-import { TUTORIAL_STATIC_GUIDE } from '../game/TutorialManager';
 import { EMOTION_TYPES, type EmotionType } from '../game/types';
 import { makeLabel, makeText } from '../ui/text';
 import { MainMenuScene } from './MainMenuScene';
@@ -95,7 +94,7 @@ export class HowToPlayScene implements Scene {
     heading.position.set(COL_LOOP_X, COL_HEAD_Y);
     this.root.addChild(heading);
 
-    TUTORIAL_STATIC_GUIDE.forEach((item, index) => {
+    HOW_TO_PLAY_COPY.systems.forEach((item, index) => {
       const x = COL_LOOP_X;
       const y = COL_BODY_Y + index * 44;
 
@@ -106,7 +105,7 @@ export class HowToPlayScene implements Scene {
       });
       number.position.set(x, y);
 
-      const heading = makeLabel(item.title.toUpperCase(), {
+      const heading = makeLabel(item.name.toUpperCase(), {
         fontSize: 9,
         letterSpacing: 1,
         fill: COLORS.text

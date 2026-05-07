@@ -1,6 +1,6 @@
 # EMOTICORE TD
 
-Emotional Tower Defense in WebGL. Defend a fragile Core against escalating waves using nine emotion towers, Resonance synergies and targeted upgrades.
+Emotional Tower Defense in WebGL. Defend a fragile Core against escalating waves using emotion towers, Resonance synergies and targeted upgrades.
 
 Stack: TypeScript, Vite, PixiJS v8.
 
@@ -8,19 +8,31 @@ Stack: TypeScript, Vite, PixiJS v8.
 
 Version: `0.1.0-alpha`
 
-This is a playable alpha, not a content-complete game. It includes the full first-run loop, two maps, nine towers, ten enemies, a standard Wave 30 victory target and endless continuation after victory. Balance, audio polish, copy consistency and long-run variety are still alpha work.
+This is a playable alpha, not a content-complete game. It includes the full first-run loop, three maps, twelve towers, rotating bosses, a standard Wave 30 victory target, endless continuation after victory and local challenge modes. Balance, audio polish, copy consistency and long-run variety are still alpha work.
 
 Included alpha features:
 
-- 2 maps: Fractured Mind and Silent Lake.
-- 9 towers: Anger, Sadness, Joy, Fear, Calm, Hope, Disgust, Guilt and Trust.
-- 10 enemies including the boss The Spiral.
+- 3 maps: Fractured Mind, Silent Lake and Panic Circuit.
+- 12 towers: Anger, Sadness, Joy, Fear, Calm, Hope, Disgust, Guilt, Trust, Shame, Love and Pride.
+- 12 enemies including The Spiral, The Mask and The Burnout.
 - Standard run to Wave 30.
 - Endless mode after victory.
+- Challenge modes: Boss Rush, Limited Emotions, Fragile Core and Resonance Trial.
+- Premium dark-neon UI polish with animated menus, smoother scene transitions, clearer HUD feedback and richer combat impacts.
 - Main Menu, Tutorial, How To Play, Settings, Credits.
 - Save/highscore persistence via LocalStorage.
 - Run Summary after victory and defeat.
 - Boss intro and defeat state.
+
+## Run Modes
+
+- Standard: baseline Wave 30 run. Standard balance is not modified by challenge rules.
+- Boss Rush: boss waves every 5 waves, reduced rewards and stronger boss pressure.
+- Limited Emotions: a seeded pool allows only 5 tower emotions for that run.
+- Fragile Core: reduced starting Stability with slightly more starting Memory.
+- Resonance Trial: stronger local synergies, harsher single-emotion imbalance.
+
+Challenge records are stored locally per mode and map. There is no backend, account system or online leaderboard in this phase.
 
 ## Setup
 
@@ -62,7 +74,7 @@ npm run typecheck
 
 | Input | Action |
 | --- | --- |
-| `1` to `9` | Select emotion tower |
+| `1` to `9` | Select visible emotion tower |
 | Left click | Place tower / select tower |
 | Right click | Cancel placement |
 | `Esc` | Clear selection |

@@ -2,6 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { CANVAS, COLORS, DEFAULT_MAP, FIELD, GRID_SIZE, type MapDefinition } from './config';
 import type { Vec2 } from './types';
 import { PathSampler, dist, clamp } from './math';
+import type { QualitySetting } from '../core/SaveManager';
 
 const PATH_HALF_WIDTH = 22;
 
@@ -74,6 +75,31 @@ interface DecorReflection {
   phase: number;
 }
 
+interface DecorPillar {
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+  phase: number;
+}
+
+interface DecorEmber {
+  x: number;
+  y: number;
+  speed: number;
+  drift: number;
+  size: number;
+  phase: number;
+  color: number;
+}
+
+interface DecorScorch {
+  x: number;
+  y: number;
+  radius: number;
+  phase: number;
+}
+
 export class GameMap {
   readonly container: Container;
   readonly path: PathSampler;
@@ -91,6 +117,7 @@ export class GameMap {
   private coreTime = 0;
   private decorTime = 0;
   private coreStabilityRatio = 1;
+  private quality: QualitySetting = 'medium';
 
   /* style-specific decoration state */
   private ripples: DecorRipple[] = [];
@@ -102,6 +129,9 @@ export class GameMap {
   private unstableNodes: DecorNode[] = [];
   private fogBands: DecorFogBand[] = [];
   private reflections: DecorReflection[] = [];
+  private pillars: DecorPillar[] = [];
+  private embers: DecorEmber[] = [];
+  private scorches: DecorScorch[] = [];
 
   /** Cells that are blocked because a tower is on them (cell key "cx,cy") */
   private occupied = new Set<string>();
@@ -183,6 +213,34 @@ export class GameMap {
         .fill({ color: 0xff77ff, alpha: 0.18 });
       this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 3, FIELD.width, 3)
         .fill({ color: 0xff77ff, alpha: 0.18 });
+    } else if (this.definition.style === 'palace') {
+      // palace: warm gold haze + horizontal marble bands
+      for (let i = 0; i < 10; i++) {
+        const t = i / 9;
+        this.bg.rect(FIELD.x, FIELD.y + t * FIELD.height, FIELD.width, FIELD.height / 9)
+          .fill({ color: 0xffd166, alpha: 0.015 + Math.sin(i) * 0.008 });
+      }
+      // top + bottom ornament bars
+      this.bg.rect(FIELD.x, FIELD.y, FIELD.width, 6)
+        .fill({ color: 0xffd166, alpha: 0.22 });
+      this.bg.rect(FIELD.x, FIELD.y + 8, FIELD.width, 1)
+        .fill({ color: 0xfff0c8, alpha: 0.5 });
+      this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 6, FIELD.width, 6)
+        .fill({ color: 0xffd166, alpha: 0.22 });
+      this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 9, FIELD.width, 1)
+        .fill({ color: 0xfff0c8, alpha: 0.5 });
+    } else if (this.definition.style === 'burnout') {
+      // burnout: dark red field with heat haze and scorched edges
+      for (let i = 0; i < 8; i++) {
+        const t = i / 7;
+        this.bg.rect(FIELD.x, FIELD.y + t * FIELD.height, FIELD.width, FIELD.height / 7)
+          .fill({ color: 0xff5b3a, alpha: 0.014 + (1 - t) * 0.012 });
+      }
+      // smouldering edges
+      this.bg.rect(FIELD.x, FIELD.y, FIELD.width, 5)
+        .fill({ color: 0xff5b3a, alpha: 0.32 });
+      this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 5, FIELD.width, 5)
+        .fill({ color: 0xffd166, alpha: 0.18 });
     } else {
       // fractured: subtle radial darkening near the edges
       this.bg.rect(FIELD.x, FIELD.y, FIELD.width, 4)
@@ -198,7 +256,8 @@ export class GameMap {
   private drawGrid() {
     const g = this.gridG;
     g.clear();
-    const dotted = this.definition.style === 'silent';
+    const style = this.definition.style;
+    const dotted = style === 'silent' || style === 'burnout';
     const gridColor = this.definition.backgroundColors.grid;
     const gridStrongColor = this.definition.backgroundColors.gridStrong;
 
@@ -250,6 +309,62 @@ export class GameMap {
   }
 
   private initDecorations() {
+    if (this.definition.style === 'palace') {
+      // pillars at vertical positions, biased to side gutters
+      const lanes = [FIELD.x + 50, FIELD.x + 130, FIELD.x + FIELD.width - 130, FIELD.x + FIELD.width - 50];
+      for (let i = 0; i < 16; i++) {
+        const x = lanes[i % lanes.length] + ((i % 2 === 0) ? 0 : 12);
+        const y = FIELD.y + 40 + Math.floor(i / lanes.length) * 140;
+        if (this.distanceToPath({ x, y }) < 50) continue;
+        this.pillars.push({ x, y, height: 96 + (i % 3) * 14, width: 14, phase: i * 0.41 });
+      }
+      // gentle gold sparkles re-using ember slot
+      for (let i = 0; i < 20; i++) {
+        const point = this.findOpenSpot(36);
+        if (!point) continue;
+        this.embers.push({
+          x: point.x,
+          y: point.y,
+          speed: 0,
+          drift: 0,
+          size: 1.2 + (i % 3) * 0.5,
+          phase: i * 0.27,
+          color: i % 2 === 0 ? 0xffd166 : 0xfff0c8
+        });
+      }
+      return;
+    }
+    if (this.definition.style === 'burnout') {
+      // scorch marks scattered around the field
+      for (let i = 0; i < 12; i++) {
+        const point = this.findOpenSpot(38);
+        if (!point) continue;
+        this.scorches.push({ x: point.x, y: point.y, radius: 10 + (i % 4) * 4, phase: i * 0.7 });
+      }
+      // drifting embers
+      for (let i = 0; i < 28; i++) {
+        this.embers.push({
+          x: FIELD.x + 20 + Math.random() * (FIELD.width - 40),
+          y: FIELD.y + Math.random() * FIELD.height,
+          speed: 18 + (i % 6) * 4,
+          drift: 6 + (i % 4) * 2,
+          size: 1.2 + (i % 3) * 0.7,
+          phase: i * 0.31,
+          color: i % 3 === 0 ? 0xffd166 : i % 3 === 1 ? 0xff5b3a : 0xff8b58
+        });
+      }
+      // heat haze bands re-using fogBand slot
+      for (let i = 0; i < 4; i++) {
+        this.fogBands.push({
+          y: FIELD.y + 70 + i * 130,
+          width: 200 + i * 40,
+          speed: 24 + i * 6,
+          phase: i * 73,
+          alpha: 0.05 + i * 0.008
+        });
+      }
+      return;
+    }
     if (this.definition.style === 'silent') {
       // ripples scattered around the field, biased away from the path
       for (let i = 0; i < 14; i++) {
@@ -367,6 +482,41 @@ export class GameMap {
     const g = this.decorStaticG;
     g.clear();
 
+    if (this.definition.style === 'palace') {
+      for (const p of this.pillars) {
+        const halfW = p.width / 2;
+        // capital
+        g.rect(p.x - halfW - 4, p.y - p.height / 2 - 6, p.width + 8, 6)
+          .fill({ color: 0xffd166, alpha: 0.35 });
+        // shaft
+        g.rect(p.x - halfW, p.y - p.height / 2, p.width, p.height)
+          .fill({ color: 0xfff0c8, alpha: 0.06 })
+          .stroke({ color: 0xffd166, width: 1, alpha: 0.5 });
+        // base
+        g.rect(p.x - halfW - 4, p.y + p.height / 2, p.width + 8, 6)
+          .fill({ color: 0xffd166, alpha: 0.35 });
+        // inner highlight
+        g.rect(p.x - 1, p.y - p.height / 2 + 4, 2, p.height - 8)
+          .fill({ color: 0xfff0c8, alpha: 0.18 });
+      }
+      return;
+    }
+    if (this.definition.style === 'burnout') {
+      for (const s of this.scorches) {
+        // scorched ground — concentric burns
+        g.circle(s.x, s.y, s.radius + 6).fill({ color: 0x000000, alpha: 0.35 });
+        g.circle(s.x, s.y, s.radius).fill({ color: 0x3a0a04, alpha: 0.65 });
+        g.circle(s.x, s.y, s.radius * 0.6).fill({ color: 0x6a1a08, alpha: 0.6 });
+        // crackle highlight
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2 + s.phase;
+          g.moveTo(s.x + Math.cos(a) * (s.radius * 0.3), s.y + Math.sin(a) * (s.radius * 0.3))
+            .lineTo(s.x + Math.cos(a) * (s.radius * 1.05), s.y + Math.sin(a) * (s.radius * 1.05))
+            .stroke({ color: 0xff5b3a, width: 1, alpha: 0.32 });
+        }
+      }
+      return;
+    }
     if (this.definition.style === 'silent') {
       for (const reflection of this.reflections) {
         g.moveTo(reflection.x - reflection.width / 2, reflection.y)
@@ -415,6 +565,52 @@ export class GameMap {
     g.clear();
     const t = this.decorTime;
 
+    if (this.definition.style === 'palace') {
+      // pillar shimmer
+      for (const p of this.pillars) {
+        const shimmer = 0.5 + Math.sin(t * 0.9 + p.phase) * 0.5;
+        const halfW = p.width / 2;
+        g.rect(p.x - halfW + 1, p.y - p.height / 2 + 6, p.width - 2, p.height - 12)
+          .fill({ color: 0xfff0c8, alpha: 0.04 + shimmer * 0.07 });
+      }
+      // gold sparkle dust
+      for (const dust of this.embers) {
+        const pulse = 0.5 + Math.sin(t * 2.6 + dust.phase) * 0.5;
+        if (pulse < 0.55) continue;
+        g.circle(dust.x, dust.y, dust.size + pulse * 0.6)
+          .fill({ color: dust.color, alpha: 0.18 + pulse * 0.32 });
+      }
+      return;
+    }
+    if (this.definition.style === 'burnout') {
+      // heat haze
+      for (const band of this.fogBands) {
+        const x = FIELD.x + ((t * band.speed + band.phase) % (FIELD.width + band.width)) - band.width;
+        g.ellipse(x + band.width / 2, band.y, band.width / 2, 16)
+          .fill({ color: 0xff5b3a, alpha: band.alpha });
+        g.ellipse(x + band.width * 0.7, band.y + 10, band.width / 3, 10)
+          .fill({ color: 0xffd166, alpha: band.alpha * 0.6 });
+      }
+      // drifting embers — rise upward, wrap when off the top
+      for (const em of this.embers) {
+        const totalDrift = FIELD.height + 40;
+        const cyc = ((t * em.speed + em.phase * 60) % totalDrift);
+        const yPos = FIELD.y + FIELD.height - cyc;
+        const xPos = em.x + Math.sin(t * 1.4 + em.phase * 4) * em.drift;
+        const lifeAlpha = (1 - cyc / totalDrift) * 0.85;
+        g.circle(xPos, yPos, em.size + lifeAlpha * 0.6)
+          .fill({ color: em.color, alpha: 0.4 + lifeAlpha * 0.4 });
+        g.circle(xPos, yPos, em.size * 2)
+          .fill({ color: em.color, alpha: 0.04 + lifeAlpha * 0.06 });
+      }
+      // scorch pulses
+      for (const s of this.scorches) {
+        const pulse = 0.5 + Math.sin(t * 3 + s.phase) * 0.5;
+        g.circle(s.x, s.y, s.radius * 0.32 + pulse * 1.5)
+          .fill({ color: 0xff5b3a, alpha: 0.18 + pulse * 0.22 });
+      }
+      return;
+    }
     if (this.definition.style === 'silent') {
       for (const band of this.fogBands) {
         const x = FIELD.x + ((t * band.speed + band.phase) % (FIELD.width + band.width)) - band.width;
@@ -484,8 +680,28 @@ export class GameMap {
       g.stroke({ color: colors.pathCore, width: 2, alpha: 0.7, cap: 'round', join: 'round' });
       this.tracePath(g);
       g.stroke({ color: 0xffffff, width: 0.6, alpha: 0.18, cap: 'round', join: 'round' });
+    } else if (this.definition.style === 'palace') {
+      // palace: ornate gold rails with double trim
+      this.tracePath(g);
+      g.stroke({ color: colors.pathEdge, width: PATH_HALF_WIDTH * 2 + 12, alpha: 0.55, cap: 'round', join: 'miter' });
+      this.tracePath(g);
+      g.stroke({ color: 0x2a1808, width: PATH_HALF_WIDTH * 2, alpha: 0.95, cap: 'round', join: 'miter' });
+      this.tracePath(g);
+      g.stroke({ color: colors.pathCore, width: 3, alpha: 0.82, cap: 'round', join: 'miter' });
+      this.tracePath(g);
+      g.stroke({ color: 0xfff0c8, width: 1, alpha: 0.45, cap: 'round', join: 'miter' });
+    } else if (this.definition.style === 'burnout') {
+      // burnout: cracked ember channel
+      this.tracePath(g);
+      g.stroke({ color: 0x3a0a04, width: PATH_HALF_WIDTH * 2 + 12, alpha: 0.85, cap: 'round', join: 'round' });
+      this.tracePath(g);
+      g.stroke({ color: colors.pathEdge, width: PATH_HALF_WIDTH * 2 + 4, alpha: 0.7, cap: 'round', join: 'round' });
+      this.tracePath(g);
+      g.stroke({ color: 0x180603, width: PATH_HALF_WIDTH * 2, alpha: 0.9, cap: 'round', join: 'round' });
+      this.tracePath(g);
+      g.stroke({ color: colors.pathCore, width: 2.5, alpha: 0.95, cap: 'round', join: 'round' });
     } else {
-      // fractured: sharp neon circuit
+      // fractured + panic fall back to the sharp neon circuit treatment
       this.tracePath(g);
       g.stroke({ color: colors.pathEdge, width: PATH_HALF_WIDTH * 2 + 8, alpha: 0.45, cap: 'round', join: 'round' });
       this.tracePath(g);
@@ -510,6 +726,11 @@ export class GameMap {
   redrawCore(stabilityRatio: number) {
     this.coreStabilityRatio = clamp(stabilityRatio, 0, 1);
     this.drawCoreVisual();
+  }
+
+  setQuality(quality: QualitySetting): void {
+    this.quality = quality;
+    this.decorAnimG.visible = quality !== 'low';
   }
 
   private drawCoreVisual() {
@@ -553,7 +774,7 @@ export class GameMap {
     this.flowOffset = (this.flowOffset + dt * 220) % this.path.totalLength;
     this.coreTime += dt;
     this.decorTime += dt;
-    this.drawAnimatedDecorations();
+    if (this.quality !== 'low') this.drawAnimatedDecorations();
     this.drawFlow();
     this.drawCoreVisual();
   }

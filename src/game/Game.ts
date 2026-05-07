@@ -2,8 +2,8 @@ import { Application, Container, FederatedPointerEvent, Graphics, Text, Ticker }
 import { GlowFilter } from 'pixi-filters';
 import { audioManager } from '../core/AudioManager';
 import type { QualitySetting } from '../core/SaveManager';
-import { CANVAS, COLORS, DEFAULT_MAP, ECONOMY, EMOTION_COLOR, ENEMY_STATS, FIELD, TOWER_STATS, type BurnGroundSpec, type MapDefinition } from './config';
-import { EMOTION_TYPES, EmotionType, EnemyKind, isBossKind, type DamagePacket, type TargetingMode, type UpgradePath } from './types';
+import { BOSS_WARNING_COPY, CANVAS, COLORS, DEFAULT_MAP, ECONOMY, EMOTION_COLOR, FIELD, TOWER_STATS, type BurnGroundSpec, type MapDefinition } from './config';
+import { EmotionType, EnemyKind, isBossKind, type DamagePacket, type TargetingMode, type UpgradePath } from './types';
 import { GameMap } from './GameMap';
 import { ParticleSystem } from './Particles';
 import { Tower } from './Tower';
@@ -16,17 +16,20 @@ import { TowerBar } from '../ui/TowerBar';
 import { SidePanel } from '../ui/SidePanel';
 import { makeHeadline, makeLabel, makeText } from '../ui/text';
 import { saveManager, type SaveManager } from '../core/SaveManager';
+import { APP_VERSION } from '../core/version';
 import { TutorialManager } from './TutorialManager';
-import { STANDARD_MAX_WAVE, type GameMode } from './GameMode';
+import type { GameMode } from './GameMode';
+import { createDefaultRunConfig, type RunConfig } from './RunConfig';
 import { SynergySystem } from './SynergySystem';
 import { RunStats } from './RunStats';
+import { EconomyLog } from './EconomyLog';
 import { DevToolsOverlay, type DevToolsSnapshot } from '../debug/DevToolsOverlay';
 
 interface GameState {
   stability: number;
   memory: number;
   paused: boolean;
-  speedMultiplier: 1 | 2;
+  speedMultiplier: 1 | 2 | 3;
   autoStartEnabled: boolean;
   defeat: boolean;
   victory: boolean;
@@ -42,6 +45,7 @@ interface GameState {
 interface GameOptions {
   mode?: GameMode;
   map?: MapDefinition;
+  runConfig?: RunConfig;
   onMainMenu?: () => void;
 }
 
@@ -97,6 +101,7 @@ export class Game {
   private balance = new EmotionalBalance();
   private synergies = new SynergySystem();
   private runStats = new RunStats();
+  private economyLog = new EconomyLog();
 
   private hud: HUD;
   private towerBar: TowerBar;
@@ -152,10 +157,12 @@ export class Game {
   private ghostBody = new Graphics();
   private ghostRange = new Graphics();
   private rangePreview = new Graphics();
+  private synergyLines = new Graphics();
   private readonly saves: SaveManager;
   private mode: GameMode;
   private readonly onMainMenu?: () => void;
   private readonly mapDefinition: MapDefinition;
+  private readonly runConfig: RunConfig;
   private tutorial: TutorialManager | null = null;
   private victoryOverlay: Container | null = null;
   private pauseOverlay: Container | null = null;
@@ -166,12 +173,18 @@ export class Game {
     this.saves = saves;
     this.mode = options.mode ?? 'standard';
     this.mapDefinition = options.map ?? DEFAULT_MAP;
+    this.runConfig = options.runConfig ?? createDefaultRunConfig(this.mapDefinition.id);
     this.onMainMenu = options.onMainMenu;
-    this.waves.setMaxWave(this.mode === 'standard' ? STANDARD_MAX_WAVE : null);
+    this.mode = this.runConfig.mode;
+    this.waves.setRunConfig(this.runConfig);
     const saveData = this.saves.load();
     audioManager.applySettings(saveData.settings);
     audioManager.playMusic('run-ambient');
     this.state.autoStartEnabled = saveData.settings.autoStart;
+    this.state.stability = this.modifiedStartingStability();
+    this.state.memory = this.modifiedStartingMemory();
+    this.balance.setChallengeModifiers(this.runConfig.synergyPowerModifier ?? 1, this.runConfig.singleEmotionPenaltyModifier ?? 1);
+    this.synergies.setPowerModifier(this.runConfig.synergyPowerModifier ?? 1);
     this.root = new Container();
     this.worldRoot = new Container();
     this.mapLayer = new Container();
@@ -209,6 +222,7 @@ export class Game {
     this.ghost.addChild(this.ghostRange, this.ghostBody);
     this.overlayLayer.addChild(this.ghost);
     this.overlayLayer.addChild(this.rangePreview);
+    this.overlayLayer.addChild(this.synergyLines);
 
     /* UI */
     this.hud = new HUD();
@@ -219,12 +233,14 @@ export class Game {
       onSpeedToggle: () => this.toggleSpeed(),
       onAutoStartToggle: () => this.toggleAutoStart(),
       onRestart: () => this.restart()
-    });
+    }, { allowedTowers: this.runConfig.allowedTowers });
     this.sidePanel = new SidePanel({
       onUpgrade: (path) => this.tryUpgradeSelected(path),
       onTargetingChange: (mode) => this.setSelectedTargetingMode(mode),
-      onSell: () => this.sellSelectedTower()
+      onSell: () => this.sellSelectedTower(),
+      onCopyRunSummary: () => this.copyRunSummary()
     });
+    this.sidePanel.setRunConfig(this.runConfig, this.mapDefinition);
     this.uiLayer.addChild(this.hud.container, this.towerBar.container, this.sidePanel.container);
     if (import.meta.env.DEV) {
       this.devTools = new DevToolsOverlay({
@@ -233,10 +249,13 @@ export class Game {
         damageCore: (amount) => this.devDamageCore(amount),
         jumpToWave: (wave) => this.devJumpToWave(wave),
         spawnEnemy: (kind) => this.devSpawnEnemy(kind),
+        copyRunSummary: () => this.copyRunSummary(),
         killAllEnemies: () => this.devKillAllEnemies(),
         logRunStats: () => this.devLogRunStats(),
+        logEconomyReport: () => this.devLogEconomyReport(),
         snapshot: () => this.devSnapshot()
       });
+      this.devTools.container.visible = false;
       this.uiLayer.addChild(this.devTools.container);
     }
 
@@ -256,6 +275,7 @@ export class Game {
   }
 
   private applyQualitySettings(quality: QualitySetting): void {
+    this.map.setQuality(quality);
     this.particles.setQuality(quality);
     if (quality === 'low') {
       this.enemiesLayer.filters = [];
@@ -342,15 +362,30 @@ export class Game {
       this.toggleSpeed();
     } else if (e.code === 'KeyR' && (this.state.defeat || this.state.victory)) {
       this.restart();
+    } else if (e.code === 'F2' || e.code === 'Backquote') {
+      e.preventDefault();
+      this.toggleDevTools();
     } else if (e.code.startsWith('Digit')) {
       const index = Number(e.code.slice(5)) - 1;
-      if (index >= 0 && index < EMOTION_TYPES.length) this.setSelectedType(EMOTION_TYPES[index]);
+      const type = this.towerBar.visibleTypeAt(index);
+      if (type) this.setSelectedType(type);
     }
+  }
+
+  private toggleDevTools() {
+    if (!this.devTools) return;
+    const next = !this.devTools.container.visible;
+    this.devTools.container.visible = next;
+    this.showStatusNotice(next ? 'DEV TOOLS ON' : 'DEV TOOLS OFF', 1.2);
   }
 
   /* --------------------------- placement -------------------------- */
 
   private setSelectedType(t: EmotionType | null) {
+    if (t && this.runConfig.allowedTowers && !this.runConfig.allowedTowers.includes(t)) {
+      this.showStatusNotice('Emotion locked by challenge rules', 1.2);
+      return;
+    }
     if (t && TOWER_STATS[t].cost > this.state.memory) {
       // still allow toggling, but ghost will show invalid
     }
@@ -410,6 +445,11 @@ export class Game {
 
   private tryPlace(_wx: number, _wy: number) {
     if (!this.selectedTowerType || !this.hoveredCell) return;
+    if (this.runConfig.allowedTowers && !this.runConfig.allowedTowers.includes(this.selectedTowerType)) {
+      this.showStatusNotice('Emotion locked by challenge rules', 1.2);
+      this.cancelPlacement();
+      return;
+    }
     const { cx, cy } = this.hoveredCell;
     if (!this.map.isPlaceable(cx, cy)) {
       this.showStatusNotice('Invalid build space');
@@ -436,7 +476,7 @@ export class Game {
     this.map.occupy(cx, cy);
     this.balance.add(this.selectedTowerType);
     this.refreshSynergies();
-    this.spendMemory(cost);
+    this.spendMemory(cost, 'tower');
     this.applyBalanceModifiers();
     audioManager.playSfx('tower-place');
     this.tutorial?.onTowerPlaced(tower.type, this.towers.length);
@@ -499,9 +539,10 @@ export class Game {
     }
     if (!tower.upgrade(path)) return;
     this.runStats.recordUpgradePurchased();
+    this.runStats.recordHighestUpgradeLevel(tower.getUpgradeState().level);
     audioManager.playSfx('tower-upgrade');
     this.tutorial?.onTowerUpgraded(path);
-    this.spendMemory(cost);
+    this.spendMemory(cost, 'upgrade');
     this.addCombatNotice(tower.x, tower.y - 30, 'UPGRADE', EMOTION_COLOR[tower.type], 1.0);
     const c = EMOTION_COLOR[tower.type];
     this.particles.ring(tower.x, tower.y, { color: c, startRadius: 18, endRadius: 72, duration: 0.55, thickness: 2.5 });
@@ -607,13 +648,14 @@ export class Game {
 
       if (e.reachedCore) {
         this.coreHit(e.damage);
+        this.economyLog.recordEnemyLeaked();
         this.removeEnemy(e, false);
         continue;
       }
       if (!e.alive && !e.rewarded) {
         e.rewarded = true;
         this.runStats.recordKill(e.kind, e.bounty, this.waves.current);
-        this.gainMemory(e.bounty);
+        this.gainMemory(e.bounty, true, 'bounty');
         this.addCombatNotice(e.x, e.y - e.radius - 10, `+${e.bounty}`, 0xffd166, 0.9);
         if (e.kind === EnemyKind.ShameSwarm) this.triggerShamePulse(e);
         e.spawnDeathParticles(this.particles);
@@ -682,18 +724,42 @@ export class Game {
       this.worldRoot.x = 0; this.worldRoot.y = 0;
     }
 
+    this.drawSynergyLines();
     this.refreshUi();
   }
 
   /* ------------------------------------------------------------------ */
 
+  private drawSynergyLines() {
+    this.synergyLines.clear();
+    if (!this.selectedTower) return;
+    const t1 = this.selectedTower;
+    
+    for (const t2 of this.towers) {
+      if (t1 === t2) continue;
+      for (const syn of this.synergies.activeSynergies()) {
+        if ((syn.emotions[0] === t1.type && syn.emotions[1] === t2.type) ||
+            (syn.emotions[1] === t1.type && syn.emotions[0] === t2.type)) {
+          const r = syn.activationRadius ?? 170;
+          const dx = t1.x - t2.x;
+          const dy = t1.y - t2.y;
+          if (dx * dx + dy * dy <= r * r) {
+            this.synergyLines.moveTo(t1.x, t1.y)
+                .lineTo(t2.x, t2.y)
+                .stroke({ color: 0x77ffaa, width: 2, alpha: 0.35 });
+            break;
+          }
+        }
+      }
+    }
+  }
   private devAddMemory(amount: number): void {
     this.gainMemory(amount, false);
     this.showStatusNotice(`DEV +${amount} Memory`, 0.9);
   }
 
   private devHealCore(): void {
-    this.state.stability = ECONOMY.startingStability;
+    this.state.stability = this.modifiedStartingStability();
     this.state.coreShield = 0;
     this.map.redrawCore(1);
     this.showStatusNotice('DEV Core healed', 0.9);
@@ -737,12 +803,59 @@ export class Game {
     this.showStatusNotice('DEV RunStats logged', 0.9);
   }
 
+  /** Build a self-contained snapshot of the current run for playtesters.
+   *  Combines RunConfig, map metadata and RunStats so a paste in the
+   *  feedback template captures everything needed to reproduce the run. */
+  private buildRunSnapshotJson(): string {
+    const result = this.state.victory ? 'victory' : this.state.defeat ? 'defeat' : 'in_progress';
+    const payload = {
+      game: 'emoticore-td',
+      version: APP_VERSION,
+      endedAt: new Date().toISOString(),
+      result,
+      wave: this.waves.current,
+      stability: this.state.stability,
+      maxStability: this.modifiedStartingStability(),
+      memory: this.state.memory,
+      config: {
+        mode: this.runConfig.mode,
+        seed: this.runConfig.seed,
+        rules: this.runConfig.rules,
+        allowedTowers: this.runConfig.allowedTowers,
+        map: { id: this.mapDefinition.id, name: this.mapDefinition.name, theme: this.mapDefinition.theme }
+      },
+      stats: this.runStats.toJson()
+    };
+    return JSON.stringify(payload, null, 2);
+  }
+
+  /** Copy the current run summary to the clipboard, with a console fallback. */
+  copyRunSummary(): void {
+    const json = this.buildRunSnapshotJson();
+    const onSuccess = () => this.showStatusNotice('Run summary copied', 1.4);
+    const onFallback = () => {
+      console.info('[EMOTICORE TD] Run summary (clipboard unavailable)\n' + json);
+      this.showStatusNotice('Run summary in console', 1.6);
+    };
+    const clipboard = (typeof navigator !== 'undefined' ? navigator.clipboard : null);
+    if (clipboard?.writeText) {
+      clipboard.writeText(json).then(onSuccess).catch(onFallback);
+    } else {
+      onFallback();
+    }
+  }
+
+  private devLogEconomyReport(): void {
+    this.economyLog.logReport();
+    this.showStatusNotice('DEV Economy Report logged', 0.9);
+  }
+
   private devSnapshot(): DevToolsSnapshot {
     return {
       wave: this.waves.current,
       memory: this.state.memory,
       stability: this.state.stability,
-      maxStability: ECONOMY.startingStability,
+      maxStability: this.modifiedStartingStability(),
       enemies: this.enemies.length,
       towers: this.towers.length,
       projectiles: this.projectiles.length,
@@ -765,6 +878,8 @@ export class Game {
 
   private spawnEnemy(kind: EnemyKind, hpScale = 1) {
     const e = new Enemy(kind, hpScale);
+    e.baseSpeed *= this.runConfig.enemySpeedModifier ?? 1;
+    e.bounty = Math.max(0, Math.round(e.bounty * (this.runConfig.bountyModifier ?? 1)));
     this.enemies.push(e);
     this.enemiesLayer.addChild(e.container);
   }
@@ -819,7 +934,7 @@ export class Game {
     this.runStats.recordDamage(adjusted.source, dealt);
     if (adjusted.coreShield !== undefined && dealt > 0) {
       const bonus = adjusted.source === EmotionType.Trust && (target.kind === EnemyKind.PanicRunner || target.kind === EnemyKind.VoidWraith) ? 1.65 : 1;
-      this.state.coreShield = Math.min(8, this.state.coreShield + adjusted.coreShield * bonus);
+      this.state.coreShield = Math.min(ECONOMY.coreShieldMax, this.state.coreShield + adjusted.coreShield * bonus);
     }
     if (dealt >= 1) {
       this.addCombatNotice(target.x, target.y - target.radius - 12, `-${Math.round(dealt)}`, EMOTION_COLOR[adjusted.source], 0.55);
@@ -947,19 +1062,27 @@ export class Game {
       color: 0xff5577, startRadius: 24, endRadius: 90, duration: 0.5, thickness: 3
     });
     audioManager.playSfx('core-hit');
-    this.map.redrawCore(this.state.stability / ECONOMY.startingStability);
+    this.map.redrawCore(this.state.stability / this.modifiedStartingStability());
     this.addCombatNotice(this.map.corePos.x, this.map.corePos.y - 46, `-${amount} STABILITY`, 0xff5577, 1.0);
+    this.economyLog.recordCoreDamage(amount);
     if (this.state.stability <= 0) this.lose();
   }
 
-  private gainMemory(amount: number, countStats = true) {
+  private gainMemory(amount: number, countStats = true, source: 'bounty' | 'bonus' | 'interest' | 'other' = 'other') {
     this.state.memory += amount;
-    if (countStats) this.runStats.recordMemoryEarned(amount);
+    if (countStats) {
+      this.runStats.recordMemoryEarned(amount);
+      if (source === 'bounty')   this.economyLog.recordBounty(amount);
+      if (source === 'bonus')    this.economyLog.recordWaveBonus(amount);
+      if (source === 'interest') this.economyLog.recordInterest(amount);
+    }
     this.refreshEconomyUi();
   }
 
-  private spendMemory(amount: number) {
+  private spendMemory(amount: number, purpose: 'tower' | 'upgrade' = 'tower') {
     this.state.memory = Math.max(0, this.state.memory - amount);
+    if (purpose === 'tower')   this.economyLog.recordSpentTower(amount);
+    if (purpose === 'upgrade') this.economyLog.recordSpentUpgrade(amount);
     this.refreshEconomyUi();
   }
 
@@ -983,14 +1106,15 @@ export class Game {
     const def = this.waves.nextDef();
     if (!def) return;
     if (def.isBoss) {
-      this.showBossIntro(next, ENEMY_STATS[bossKindForWave(next)].label.toUpperCase());
+      this.showBossIntro(next, bossKindForWave(next, this.runConfig.bossFrequency ?? 10));
       return;
     }
     this.beginWave(next, false);
   }
 
-  private showBossIntro(wave: number, bossName: string): void {
+  private showBossIntro(wave: number, bossKind: EnemyKind): void {
     if (this.bossIntroOverlay) return;
+    const bossInfo = BOSS_WARNING_COPY[bossKind] ?? BOSS_WARNING_COPY[EnemyKind.Spiral]!;
     this.bossIntroWave = wave;
     this.state.bossIntroTimer = 2.45;
     this.state.autoStartIn = AUTO_START_SECONDS;
@@ -1011,7 +1135,7 @@ export class Game {
     waveText.anchor.set(0.5);
     waveText.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 - 86);
 
-    const name = makeHeadline(bossName, {
+    const name = makeHeadline(bossInfo.name, {
       fontSize: 48,
       fontWeight: '900',
       letterSpacing: 8,
@@ -1027,7 +1151,30 @@ export class Game {
     sub.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 + 38);
     sub.label = 'boss-intro-sub';
 
-    overlay.addChild(tint, ring, waveText, name, sub);
+    const mechanic = makeText(bossInfo.mechanic, {
+      fontSize: 13,
+      fill: COLORS.text,
+      align: 'center',
+      wordWrap: true,
+      wordWrapWidth: 520,
+      lineHeight: 18
+    });
+    mechanic.anchor.set(0.5);
+    mechanic.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 + 76);
+
+    const counter = makeText(`Counter: ${bossInfo.counter}`, {
+      fontSize: 12,
+      fontWeight: '700',
+      fill: COLORS.warn,
+      align: 'center',
+      wordWrap: true,
+      wordWrapWidth: 560,
+      lineHeight: 17
+    });
+    counter.anchor.set(0.5);
+    counter.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 + 126);
+
+    overlay.addChild(tint, ring, waveText, name, sub, mechanic, counter);
     this.bossIntroOverlay = overlay;
     this.uiLayer.addChild(overlay);
     this.shake(0.8);
@@ -1078,6 +1225,13 @@ export class Game {
   }
 
   private beginWave(next: number, boss: boolean) {
+    this.economyLog.beginWave(
+      next,
+      this.state.memory,
+      this.towers.length,
+      this.runStats.upgradesPurchased,
+      this.synergies.activeCount()
+    );
     this.waves.start(next);
     audioManager.playSfx('wave-start');
     this.tutorial?.onWaveStarted();
@@ -1090,16 +1244,30 @@ export class Game {
   private completeWave() {
     this.waves.endWave();
     const def = this.waves.currentDef();
-    const bonus = (def?.bonusMemory ?? 0) + ECONOMY.waveCompleteBonus;
-    const interest = Math.floor(this.state.memory * ECONOMY.interestPerWave);
-    this.gainMemory(bonus + interest);
+    const bonus = (def?.bonusMemory ?? 0) + Math.floor(ECONOMY.waveCompleteBonus * (this.runConfig.waveBonusModifier ?? 1));
+    const rawInterest = Math.floor(this.state.memory * ECONOMY.interestPerWave);
+    const interest = Math.min(rawInterest, ECONOMY.interestCap);
+    this.gainMemory(bonus, true, 'bonus');
+    this.gainMemory(interest, true, 'interest');
     this.runStats.recordWaveComplete(this.waves.current, !!def?.isBoss);
+
+    // close out the economy row for this wave
+    const maxUpgLevel = this.towers.reduce((max, t) => {
+      return Math.max(max, t.getUpgradeState().level);
+    }, 0);
+    this.economyLog.endWave(
+      this.state.memory,
+      this.towers.length,
+      this.runStats.upgradesPurchased,
+      maxUpgLevel
+    );
+
     this.restoreStabilityFromCalm();
     this.state.betweenWaves = true;
     this.state.autoStartIn = AUTO_START_SECONDS;
     this.showStatusNotice(`Wave ${this.waves.current} complete: +${bonus + interest} Memory`, 1.8);
     audioManager.playSfx('wave-complete');
-    if (this.mode === 'standard' && this.waves.isLast()) {
+    if (this.runConfig.maxWave !== undefined && this.waves.isLast()) {
       this.win();
       return;
     }
@@ -1221,7 +1389,7 @@ export class Game {
   }
 
   private updateLowStabilityWarning(dt: number): void {
-    const ratio = this.state.stability / ECONOMY.startingStability;
+    const ratio = this.state.stability / this.modifiedStartingStability();
     if (ratio >= 0.35 || this.state.defeat || this.state.victory) {
       this.lowStabilityPulseTimer = 0;
       return;
@@ -1242,12 +1410,16 @@ export class Game {
 
   private restoreStabilityFromCalm() {
     if (this.state.stability <= 0) return;
-    const restore = this.towers.reduce((sum, t) => sum + t.getSpecialStats().stabilityOnWaveComplete, 0);
-    if (restore <= 0 || this.state.stability >= ECONOMY.startingStability) return;
+    const restore = Math.min(
+      ECONOMY.stabilityRegenCapPerWave,
+      this.towers.reduce((sum, t) => sum + t.getSpecialStats().stabilityOnWaveComplete, 0)
+    );
+    const maxStability = this.modifiedStartingStability();
+    if (restore <= 0 || this.state.stability >= maxStability) return;
     const before = this.state.stability;
-    this.state.stability = Math.min(ECONOMY.startingStability, this.state.stability + restore);
+    this.state.stability = Math.min(maxStability, this.state.stability + restore);
     if (this.state.stability === before) return;
-    this.map.redrawCore(this.state.stability / ECONOMY.startingStability);
+    this.map.redrawCore(this.state.stability / maxStability);
     this.addCombatNotice(this.map.corePos.x, this.map.corePos.y - 46, `+${this.state.stability - before} STABILITY`, EMOTION_COLOR[EmotionType.Calm], 1.0);
     this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
       color: EMOTION_COLOR[EmotionType.Calm], startRadius: 24, endRadius: 100, duration: 0.65, thickness: 2.5
@@ -1262,10 +1434,11 @@ export class Game {
   private lose() {
     if (this.state.defeat) return;
     this.state.defeat = true;
-    this.saves.recordRun(this.waves.current, this.calculateScore());
+    this.saves.recordChallengeRun(this.runConfig.mode, this.runConfig.mapId, this.waves.current, this.calculateScore(), this.runConfig.seed);
     audioManager.playSfx('game-over');
     audioManager.playMusic('game-over');
     this.sidePanel.showDefeat(this.waves.current, this.runStats.summary());
+    this.economyLog.logSummary(`DEFEAT — Wave ${this.waves.current}`);
     this.showStatusNotice('Defeat - restart is available', 5);
     this.refreshUi();
     this.shake(2);
@@ -1280,10 +1453,11 @@ export class Game {
     this.state.paused = false;
     this.state.autoStartIn = 0;
     this.runStats.recordVictory(this.state.stability);
-    this.saves.recordRun(this.waves.current, this.calculateScore());
+    this.saves.recordChallengeRun(this.runConfig.mode, this.runConfig.mapId, this.waves.current, this.calculateScore(), this.runConfig.seed);
     audioManager.playSfx('victory');
     audioManager.playMusic('victory');
     this.sidePanel.showVictory(this.runStats.summary());
+    this.economyLog.logSummary('VICTORY');
     this.showStatusNotice('Victory - Core stabilized', 5);
     this.showVictoryOverlay();
     this.refreshUi();
@@ -1316,7 +1490,7 @@ export class Game {
   }
 
   private toggleSpeed() {
-    this.state.speedMultiplier = this.state.speedMultiplier === 1 ? 2 : 1;
+    this.state.speedMultiplier = this.state.speedMultiplier === 1 ? 2 : this.state.speedMultiplier === 2 ? 3 : 1;
     this.refreshUi();
   }
 
@@ -1366,10 +1540,10 @@ export class Game {
     const keepSpeed = this.state.speedMultiplier;
     const keepAuto = this.state.autoStartEnabled;
     this.mode = mode;
-    this.waves.setMaxWave(this.mode === 'standard' ? STANDARD_MAX_WAVE : null);
+    this.waves.setRunConfig(this.runConfig);
     this.state = {
-      stability: ECONOMY.startingStability,
-      memory: ECONOMY.startingMemory,
+      stability: this.modifiedStartingStability(),
+      memory: this.modifiedStartingMemory(),
       paused: false,
       speedMultiplier: keepSpeed,
       autoStartEnabled: keepAuto,
@@ -1385,8 +1559,11 @@ export class Game {
     };
     this.waves.reset();
     this.balance = new EmotionalBalance();
+    this.balance.setChallengeModifiers(this.runConfig.synergyPowerModifier ?? 1, this.runConfig.singleEmotionPenaltyModifier ?? 1);
     this.synergies = new SynergySystem();
+    this.synergies.setPowerModifier(this.runConfig.synergyPowerModifier ?? 1);
     this.runStats = new RunStats();
+    this.economyLog.reset();
     this.sidePanel.setActiveSynergies([]);
     this.balanceDisruption = 0;
     this.leechNoticeTimer = 0;
@@ -1614,15 +1791,25 @@ export class Game {
     return this.runStats.score;
   }
 
+  private modifiedStartingMemory(): number {
+    return Math.max(0, Math.round(ECONOMY.startingMemory * (this.runConfig.startingMemoryModifier ?? 1)));
+  }
+
+  private modifiedStartingStability(): number {
+    return Math.max(1, Math.round(ECONOMY.startingStability * (this.runConfig.startingStabilityModifier ?? 1)));
+  }
+
   private refreshSynergies(): void {
+    this.synergies.setPowerModifier(this.runConfig.synergyPowerModifier ?? 1);
     this.synergies.updateFromTowers(this.towers);
+    this.runStats.recordActiveSynergies(this.synergies.activeCount());
     this.sidePanel.setActiveSynergies(this.synergies.activeSynergies());
   }
 
   private refreshUi() {
     this.hud.update({
       stability: this.state.stability,
-      maxStability: ECONOMY.startingStability,
+      maxStability: this.modifiedStartingStability(),
       memory: this.state.memory,
       score: this.runStats.score,
       wave: this.waves.current,
@@ -1633,6 +1820,11 @@ export class Game {
       autoStartEnabled: this.state.autoStartEnabled,
       balanceDisruption: this.balanceDisruption,
       synergyStatus: this.synergies.statusText(),
+      synergyBadges: this.synergies.activeSynergies().slice(0, 6).map((synergy) => ({
+        label: synergy.label,
+        color: EMOTION_COLOR[synergy.emotions[0]]
+      })),
+      bossWave: !!(this.state.betweenWaves ? this.waves.nextDef()?.isBoss : this.waves.currentDef()?.isBoss),
       notice: this.state.notice
     }, this.balance);
     this.towerBar.setAffordability(this.state.memory);

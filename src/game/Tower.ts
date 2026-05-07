@@ -46,6 +46,7 @@ export class Tower {
   private auraTime = 0;
   private aura: Graphics;
   private upgradeFlashTimer = 0;
+  private recoilTimer = 0;
 
   constructor(type: EmotionType, cx: number, cy: number, worldX: number, worldY: number) {
     this.type = type;
@@ -338,7 +339,7 @@ export class Tower {
       const stats = t.getEffectiveStats();
       const r = stats.buffRadius ?? 0;
       if (distSq({ x: t.x, y: t.y }, { x: this.x, y: this.y }) <= r * r) {
-        mult *= stats.buffFireRate ?? 1;
+        mult *= this.supportFireRateMul(stats.buffFireRate ?? 1, 0.65);
       }
     }
     for (const t of towers) {
@@ -347,10 +348,15 @@ export class Tower {
       const r = stats.loveLinkRadius ?? 0;
       if (r <= 0 || !stats.synergies.includes(this.type)) continue;
       if (distSq({ x: t.x, y: t.y }, { x: this.x, y: this.y }) <= r * r) {
-        mult *= stats.loveFireRateMul ?? 1;
+        mult *= this.supportFireRateMul(stats.loveFireRateMul ?? 1, 0.70);
       }
     }
     this.fireRateMod = mult;
+  }
+
+  private supportFireRateMul(rawMul: number, ccScale: number): number {
+    if (this.type !== EmotionType.Fear && this.type !== EmotionType.Sadness) return rawMul;
+    return 1 - ((1 - rawMul) * ccScale);
   }
 
   loveDamageMulFrom(towers: Tower[]): number {
@@ -401,6 +407,17 @@ export class Tower {
       this.aura.circle(0, 0, r).stroke({ color: EMOTION_ACCENT[this.type], width: 3 * (1 - t), alpha: 0.9 * (1 - t) });
       this.head.scale.set(1 + Math.sin(t * Math.PI) * 0.18);
       if (this.upgradeFlashTimer <= 0) this.head.scale.set(1);
+    }
+    if (this.recoilTimer > 0) {
+      this.recoilTimer = Math.max(0, this.recoilTimer - dt);
+      const recoil = Math.sin((this.recoilTimer / 0.14) * Math.PI);
+      this.head.scale.set(1 + recoil * 0.1);
+      this.head.x = -Math.cos(this.rotation) * recoil * 3;
+      this.head.y += -Math.sin(this.rotation) * recoil * 3;
+      if (this.recoilTimer <= 0) {
+        this.head.scale.set(1);
+        this.head.x = 0;
+      }
     }
 
     // smooth rotation toward target angle
@@ -453,6 +470,7 @@ export class Tower {
     };
 
     fire(new Projectile(mx, my, target, spec));
+    this.recoilTimer = 0.14;
     if (specials.splitShots > 0) {
       const extras = this.pickAdditionalTargets(enemies, target, specials.splitShots, stats.range);
       for (const extra of extras) {
@@ -596,7 +614,35 @@ export class Tower {
       }
     }
     this.applySynergyModifiers(stats, specials);
+    this.clampStats(stats);
     return { stats, specials };
+  }
+
+  private clampStats(stats: TowerStats) {
+    if (stats.damage !== undefined) stats.damage = Math.max(1, stats.damage);
+    if (stats.range !== undefined) stats.range = Math.min(350, Math.max(50, stats.range));
+    if (stats.fireRate !== undefined) stats.fireRate = Math.min(5.0, Math.max(0.2, stats.fireRate));
+    if (stats.projectileSpeed !== undefined) stats.projectileSpeed = Math.min(1200, Math.max(100, stats.projectileSpeed));
+
+    if (stats.splashRadius !== undefined) stats.splashRadius = Math.min(150, stats.splashRadius);
+    if (stats.slowAmount !== undefined) stats.slowAmount = Math.min(0.95, Math.max(0.60, stats.slowAmount));
+    if (stats.slowDuration !== undefined) stats.slowDuration = Math.min(2.4, stats.slowDuration);
+    if (stats.fearChance !== undefined) stats.fearChance = Math.min(0.45, stats.fearChance);
+    if (stats.stunDuration !== undefined) stats.stunDuration = Math.min(0.95, stats.stunDuration);
+    if (stats.buffRadius !== undefined) stats.buffRadius = Math.min(280, stats.buffRadius);
+    if (stats.chainCount !== undefined) stats.chainCount = Math.min(8, stats.chainCount);
+    if (stats.chainRange !== undefined) stats.chainRange = Math.min(250, stats.chainRange);
+    if (stats.poisonDps !== undefined) stats.poisonDps = Math.min(200, stats.poisonDps);
+    if (stats.poisonDuration !== undefined) stats.poisonDuration = Math.min(10.0, stats.poisonDuration);
+    if (stats.armorShred !== undefined) stats.armorShred = Math.min(2.5, stats.armorShred);
+    if (stats.armorShredDuration !== undefined) stats.armorShredDuration = Math.min(8.0, stats.armorShredDuration);
+    if (stats.guiltMark !== undefined) stats.guiltMark = Math.min(0.35, stats.guiltMark);
+    if (stats.guiltExecuteThreshold !== undefined) stats.guiltExecuteThreshold = Math.min(0.25, stats.guiltExecuteThreshold);
+    if (stats.coreShield !== undefined) stats.coreShield = Math.min(1.0, stats.coreShield);
+    if (stats.trustAnchorDuration !== undefined) stats.trustAnchorDuration = Math.min(3.0, stats.trustAnchorDuration);
+    if (stats.shameGroupRadius !== undefined) stats.shameGroupRadius = Math.min(160, stats.shameGroupRadius);
+    if (stats.shameGroupDamageMul !== undefined) stats.shameGroupDamageMul = Math.min(2.0, stats.shameGroupDamageMul);
+    if (stats.loveLinkRadius !== undefined) stats.loveLinkRadius = Math.min(300, stats.loveLinkRadius);
   }
 
   private applySynergyModifiers(stats: TowerStats, specials: TowerSpecialStats) {
@@ -664,9 +710,9 @@ export class Tower {
     if (bonus.splashRadiusMul !== undefined && stats.splashRadius !== undefined) stats.splashRadius *= bonus.splashRadiusMul;
     if (bonus.chainCountAdd !== undefined) stats.chainCount = (stats.chainCount ?? 1) + bonus.chainCountAdd;
     if (bonus.chainRangeAdd !== undefined) stats.chainRange = (stats.chainRange ?? 0) + bonus.chainRangeAdd;
-    if (bonus.slowAmountMul !== undefined && stats.slowAmount !== undefined) stats.slowAmount = Math.max(0.25, stats.slowAmount * bonus.slowAmountMul);
+    if (bonus.slowAmountMul !== undefined && stats.slowAmount !== undefined) stats.slowAmount = Math.max(0.60, stats.slowAmount * bonus.slowAmountMul);
     if (bonus.slowDurationAdd !== undefined) stats.slowDuration = (stats.slowDuration ?? 0) + bonus.slowDurationAdd;
-    if (bonus.fearChanceAdd !== undefined) stats.fearChance = Math.min(0.95, (stats.fearChance ?? 0) + bonus.fearChanceAdd);
+    if (bonus.fearChanceAdd !== undefined) stats.fearChance = Math.min(0.45, (stats.fearChance ?? 0) + bonus.fearChanceAdd);
     if (bonus.stunDurationAdd !== undefined) stats.stunDuration = (stats.stunDuration ?? 0) + bonus.stunDurationAdd;
     if (bonus.buffRadiusAdd !== undefined) stats.buffRadius = (stats.buffRadius ?? 0) + bonus.buffRadiusAdd;
     if (bonus.buffFireRateMul !== undefined && stats.buffFireRate !== undefined) stats.buffFireRate *= bonus.buffFireRateMul;

@@ -1,3 +1,3 @@
 export const STANDARD_MAX_WAVE = 30;
 
-export type GameMode = 'standard' | 'endless';
+export type GameMode = 'standard' | 'endless' | 'bossRush' | 'limitedEmotions' | 'fragileCore' | 'resonanceTrial';

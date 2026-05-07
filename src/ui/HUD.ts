@@ -3,6 +3,7 @@ import { CANVAS, COLORS, ECONOMY, EMOTION_COLOR, HUD_COPY } from '../game/config
 import { EMOTION_TYPES } from '../game/types';
 import type { EmotionalBalance } from '../game/EmotionalBalance';
 import { makeLabel, makeText, makeHeadline } from './text';
+import { UI_THEME, mixToward } from './theme';
 
 export interface HUDState {
   stability: number;
@@ -17,6 +18,8 @@ export interface HUDState {
   autoStartEnabled: boolean;
   balanceDisruption: number;
   synergyStatus: string;
+  synergyBadges?: Array<{ label: string; color: number }>;
+  bossWave?: boolean;
   notice: string;
 }
 
@@ -46,6 +49,13 @@ export class HUD {
   private balanceDots: Graphics;
   private statusLabel: Text;
   private statusText: Text;
+  private synergyChips: Container;
+  private displayedStability = 0;
+  private displayedMemory = 0;
+  private displayedScore = 0;
+  private pulseTime = 0;
+  private lastStability = 0;
+  private damageFlash = 0;
 
   constructor() {
     this.container = new Container();
@@ -103,6 +113,10 @@ export class HUD {
     this.balanceValue.position.set(COL.balance, 46);
     this.container.addChild(this.balanceValue);
 
+    this.synergyChips = new Container();
+    this.synergyChips.position.set(COL.balance + 210, 28);
+    this.container.addChild(this.synergyChips);
+
     this.statusLabel = makeLabel(HUD_COPY.status, { fontSize: 9, letterSpacing: 2 });
     this.statusLabel.anchor.set(1, 0);
     this.statusLabel.position.set(COL.status, 10);
@@ -131,21 +145,37 @@ export class HUD {
   }
 
   update(state: HUDState, balance: EmotionalBalance) {
-    const ratio = Math.max(0, state.stability / state.maxStability);
+    this.pulseTime += 0.05;
+    if (this.displayedMemory === 0) this.displayedMemory = state.memory;
+    if (this.displayedScore === 0) this.displayedScore = state.score;
+    if (this.displayedStability === 0) this.displayedStability = state.stability;
+    if (state.stability < this.lastStability) this.damageFlash = 1;
+    this.lastStability = state.stability;
+    this.damageFlash = Math.max(0, this.damageFlash - 0.08);
+    this.displayedStability = mixToward(this.displayedStability, state.stability, 0.22);
+    this.displayedMemory = mixToward(this.displayedMemory, state.memory, 0.18);
+    this.displayedScore = mixToward(this.displayedScore, state.score, 0.16);
+
+    const ratio = Math.max(0, this.displayedStability / state.maxStability);
     const barW = 148, barH = 10;
     const stabColor =
       ratio > 0.5 ? 0x77ffaa :
       ratio > 0.25 ? 0xffd166 : 0xff5577;
     this.stabBar.clear();
-    this.stabBar.rect(0, 0, barW, barH).fill({ color: 0x0a0f1a, alpha: 1 })
+    const lowPulse = ratio < 0.3 ? 0.18 + Math.sin(this.pulseTime * 8) * 0.12 : 0;
+    this.stabBar.roundRect(-2, -2, barW + 4, barH + 4, 5)
+      .fill({ color: this.damageFlash > 0 ? UI_THEME.color.danger : UI_THEME.color.primary, alpha: this.damageFlash * 0.22 + lowPulse });
+    this.stabBar.roundRect(0, 0, barW, barH, 4).fill({ color: 0x05070d, alpha: 1 })
       .stroke({ color: COLORS.panelEdge, width: 1, alpha: 1 });
-    this.stabBar.rect(0, 0, barW * ratio, barH).fill({ color: stabColor, alpha: 1 });
-    this.stabValue.text = `${state.stability}/${state.maxStability}`;
+    this.stabBar.roundRect(1, 1, Math.max(2, (barW - 2) * ratio), barH - 2, 3).fill({ color: stabColor, alpha: 1 });
+    this.stabBar.rect(3, 2, Math.max(0, (barW - 6) * ratio), 2).fill({ color: 0xffffff, alpha: 0.24 });
+    this.stabValue.text = `${Math.round(state.stability)}/${state.maxStability}`;
     this.stabValue.style.fill = stabColor;
 
-    this.memoryValue.text = `${state.memory}`;
-    this.scoreValue.text = `${state.score}`;
-    this.waveValue.text = `${state.wave}`;
+    this.memoryValue.text = `${Math.round(this.displayedMemory)}`;
+    this.scoreValue.text = `${Math.round(this.displayedScore)}`;
+    this.waveValue.text = state.bossWave ? `!${state.wave}` : `${state.wave}`;
+    this.waveValue.style.fill = state.bossWave ? UI_THEME.color.danger : 0x6cf0ff;
 
     this.drawBalanceDots(balance);
     if (balance.isResonating()) {
@@ -165,6 +195,7 @@ export class HUD {
       this.balanceValue.text = state.synergyStatus === HUD_COPY.noSynergy ? HUD_COPY.building : state.synergyStatus;
       this.balanceValue.style.fill = state.synergyStatus === HUD_COPY.noSynergy ? 0xffd166 : 0x77ffaa;
     }
+    this.drawSynergyChips(state.synergyBadges ?? []);
 
     if (state.paused) {
       this.statusText.text = `${HUD_COPY.paused} / ${state.speedMultiplier}X`;
@@ -201,6 +232,33 @@ export class HUD {
         g.circle(x, 0, 8.5).stroke({ color: c, width: 1, alpha: 0.5 });
       }
       x += 18;
+    }
+  }
+
+  private drawSynergyChips(badges: Array<{ label: string; color: number }>): void {
+    this.synergyChips.removeChildren().forEach((child) => child.destroy({ children: true }));
+    const max = 5;
+    let x = 0;
+    badges.slice(0, max).forEach((badge) => {
+      const chip = new Container();
+      const bg = new Graphics();
+      const label = makeText(badge.label, { fontSize: 8, fontWeight: '800', letterSpacing: 1, fill: UI_THEME.color.text });
+      const w = Math.min(86, Math.max(34, (label.width as number) + 14));
+      bg.roundRect(0, 0, w, 18, 6)
+        .fill({ color: UI_THEME.color.panelSoft, alpha: 0.92 })
+        .stroke({ color: badge.color, width: 1, alpha: 0.88 });
+      bg.rect(5, 15, w - 10, 1).fill({ color: badge.color, alpha: 0.5 });
+      label.anchor.set(0.5);
+      label.position.set(w / 2, 9);
+      chip.position.set(x, 0);
+      chip.addChild(bg, label);
+      this.synergyChips.addChild(chip);
+      x += w + 6;
+    });
+    if (badges.length > max) {
+      const more = makeText(`+${badges.length - max}`, { fontSize: 9, fontWeight: '800', fill: UI_THEME.color.warn });
+      more.position.set(x, 3);
+      this.synergyChips.addChild(more);
     }
   }
 }

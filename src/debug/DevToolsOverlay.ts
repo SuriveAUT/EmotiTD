@@ -22,6 +22,8 @@ export interface DevToolsCallbacks {
   spawnEnemy(kind: EnemyKind): void;
   killAllEnemies(): void;
   logRunStats(): void;
+  logEconomyReport(): void;
+  copyRunSummary(): void;
   snapshot(): DevToolsSnapshot;
 }
 
@@ -56,7 +58,7 @@ export class DevToolsOverlay {
     this.container.eventMode = 'static';
 
     const bg = new Graphics();
-    bg.roundRect(0, 0, 238, 338, 8)
+    bg.roundRect(0, 0, 238, 406, 8)
       .fill({ color: 0x05070d, alpha: 0.9 })
       .stroke({ color: 0xffd166, width: 1.5, alpha: 0.9 });
     this.container.addChild(bg);
@@ -105,6 +107,10 @@ export class DevToolsOverlay {
     });
     y += 32;
     this.addButton('LOG RUNSTATS JSON', 12, y, 214, () => this.callbacks.logRunStats());
+    y += 32;
+    this.addButton('LOG ECONOMY REPORT', 12, y, 214, () => this.callbacks.logEconomyReport());
+    y += 32;
+    this.addButton('COPY RUN SUMMARY', 12, y, 214, () => this.callbacks.copyRunSummary());
 
     this.metricsText = makeText('', {
       fontSize: 10,
@@ -112,7 +118,7 @@ export class DevToolsOverlay {
       lineHeight: 14,
       letterSpacing: 0
     });
-    this.metricsText.position.set(12, 292);
+    this.metricsText.position.set(12, 360);
     this.container.addChild(this.metricsText);
 
     this.setWaveTarget(1);

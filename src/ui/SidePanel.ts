@@ -9,14 +9,18 @@ import {
   UPGRADE_PATHS,
   ENEMY_STATS,
   ENEMY_TRAITS,
+  BOSS_WARNING_COPY,
   SIDE_PANEL_COPY,
+  TOWER_HELP_COPY,
+  type MapDefinition,
   type SynergyDef,
   type TowerStats
 } from '../game/config';
-import { EmotionType, EnemyKind, TARGETING_LABEL, TARGETING_MODES, type TargetingMode, type UpgradePath } from '../game/types';
+import { EmotionType, EnemyKind, TARGETING_LABEL, TARGETING_MODES, TOWER_CATEGORY_LABEL, type TargetingMode, type UpgradePath } from '../game/types';
 import type { Tower } from '../game/Tower';
 import type { RunSummary } from '../game/RunStats';
 import type { WaveDef } from '../game/WaveManager';
+import { CHALLENGE_MODE_LABEL, type RunConfig } from '../game/RunConfig';
 import { makeLabel, makeText, makeHeadline } from './text';
 
 const PANEL_X = CANVAS.width - CANVAS.rightPanelWidth;
@@ -32,6 +36,7 @@ export interface SidePanelCallbacks {
   onUpgrade(path: UpgradePath): void;
   onTargetingChange(mode: TargetingMode): void;
   onSell(): void;
+  onCopyRunSummary?(): void;
 }
 
 export class SidePanel {
@@ -42,6 +47,8 @@ export class SidePanel {
   private scrollBar: Graphics;
   private callbacks: SidePanelCallbacks;
   private activeSynergies: SynergyDef[] = [];
+  private runConfig: RunConfig | null = null;
+  private mapDefinition: MapDefinition | null = null;
   private scrollY = 0;
   private contentHeight = 0;
 
@@ -101,6 +108,11 @@ export class SidePanel {
     this.activeSynergies = synergies;
   }
 
+  setRunConfig(config: RunConfig, map: MapDefinition): void {
+    this.runConfig = config;
+    this.mapDefinition = map;
+  }
+
   showSelectedType(type: EmotionType, affordable: boolean) {
     this.clear();
     const stats = TOWER_STATS[type];
@@ -120,7 +132,9 @@ export class SidePanel {
       fontSize: 12, fill: affordable ? 0xc0c8d8 : 0xff5577, lineHeight: 16
     });
     help.position.set(x, y); this.body.addChild(help);
-    y += 52;
+    y += 48;
+
+    y = this.appendTowerBrief(x, y, type);
 
     y = this.appendStats(x, y, type);
     y = this.appendSynergy(x, y, stats.synergies);
@@ -145,6 +159,8 @@ export class SidePanel {
     const desc = makeText(TOWER_STATS[t.type].description, { fontSize: 12, fill: 0xc0c8d8, wordWrap: true, wordWrapWidth: PANEL_W - 36, lineHeight: 16 });
     desc.position.set(x, y); this.body.addChild(desc);
     y += Math.max(40, (desc.height as number) + 10);
+
+    y = this.appendTowerBrief(x, y, t.type, false);
 
     y = this.appendStats(x, y, t.type, t.getEffectiveStats());
     y = this.appendSynergy(x, y, TOWER_STATS[t.type].synergies);
@@ -186,16 +202,21 @@ export class SidePanel {
         .fill({ color: 0x2a1018, alpha: 0.9 })
         .stroke({ color: 0xff5577, width: 1.5, alpha: 0.9 });
       const bossKind = def.groups.find(group => group.kind === EnemyKind.Spiral || group.kind === EnemyKind.Mask || group.kind === EnemyKind.BurnoutBoss)?.kind;
-      const bossText =
-        bossKind === EnemyKind.Mask ? 'The Mask resists your top damage emotion.' :
-        bossKind === EnemyKind.BurnoutBoss ? 'The Burnout creates tower-slowing Overheat zones.' :
-        'The Spiral disrupts emotional balance.';
-      const warn = makeText(`BOSS WARNING\n${bossText}`, {
-        fontSize: 11, fill: 0xffd166, fontWeight: '700', lineHeight: 16
+      const bossInfo = bossKind ? BOSS_WARNING_COPY[bossKind] : null;
+      const warn = makeText(
+        bossInfo
+          ? `${bossInfo.name}\n${bossInfo.mechanic}\nCounter: ${bossInfo.counter}`
+          : 'BOSS WARNING\nPrepare mixed damage and upgrades.',
+        {
+        fontSize: 10, fill: 0xffd166, fontWeight: '700', lineHeight: 14, wordWrap: true, wordWrapWidth: PANEL_W - 56
       });
       warn.position.set(x + 10, y + 6);
+      warnBg.clear();
+      warnBg.roundRect(x, y, PANEL_W - 36, Math.max(58, (warn.height as number) + 14), 7)
+        .fill({ color: 0x2a1018, alpha: 0.9 })
+        .stroke({ color: 0xff5577, width: 1.5, alpha: 0.9 });
       this.body.addChild(warnBg, warn);
-      y += 56;
+      y += Math.max(70, (warn.height as number) + 26);
     }
 
     const composition = aggregateComposition(def);
@@ -227,9 +248,11 @@ export class SidePanel {
     t2.position.set(x, y); this.body.addChild(t2);
     y += 56;
     if (summary) {
+      y = this.appendRunMeta(x, y);
       const run = makeText(this.formatRunSummary(summary), { fontSize: 12, fill: 0xc0c8d8, lineHeight: 18 });
       run.position.set(x, y); this.body.addChild(run);
       y += (run.height as number) + 10;
+      y = this.appendCopySummaryButton(x, y);
     }
     this.finalizeLayout(y);
   }
@@ -245,12 +268,69 @@ export class SidePanel {
     t2.position.set(x, y); this.body.addChild(t2);
     y += (t2.height as number) + 14;
     if (summary) {
+      const hints = this.defeatHints(wave, summary);
+      if (hints.length > 0) {
+        const label = makeLabel(SIDE_PANEL_COPY.tips);
+        label.position.set(x, y);
+        this.body.addChild(label);
+        y += 18;
+        for (const hint of hints) {
+          const tip = makeText(`- ${hint}`, {
+            fontSize: 11,
+            fill: 0xffd166,
+            wordWrap: true,
+            wordWrapWidth: PANEL_W - 36,
+            lineHeight: 15
+          });
+          tip.position.set(x, y);
+          this.body.addChild(tip);
+          y += Math.max(15, tip.height as number) + 3;
+        }
+        y += 8;
+      }
+      y = this.appendRunMeta(x, y);
       const run = makeText(this.formatRunSummary(summary), { fontSize: 12, fill: 0xc0c8d8, lineHeight: 18 });
       run.position.set(x, y);
       this.body.addChild(run);
       y += (run.height as number) + 10;
+      y = this.appendCopySummaryButton(x, y);
     }
     this.finalizeLayout(y);
+  }
+
+  private appendCopySummaryButton(x: number, y: number): number {
+    if (!this.callbacks.onCopyRunSummary) return y;
+    const w = PANEL_W - 36;
+    const h = 30;
+    const btn = new Container();
+    const bg = new Graphics();
+    const text = makeText('COPY RUN SUMMARY', {
+      fontSize: 11,
+      fontWeight: '800',
+      letterSpacing: 2,
+      fill: 0x6cf0ff
+    });
+    const draw = (hovered: boolean): void => {
+      bg.clear();
+      bg.roundRect(0, 0, w, h, 7)
+        .fill({ color: hovered ? 0x10202c : 0x0a0f1a, alpha: 0.96 })
+        .stroke({ color: 0x6cf0ff, width: hovered ? 1.6 : 1, alpha: hovered ? 1 : 0.7 });
+    };
+    draw(false);
+    text.anchor.set(0.5);
+    text.position.set(w / 2, h / 2);
+    btn.position.set(x, y);
+    btn.eventMode = 'static';
+    btn.cursor = 'pointer';
+    btn.on('pointerover', () => draw(true));
+    btn.on('pointerout', () => draw(false));
+    btn.on('pointerdown', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.callbacks.onCopyRunSummary?.();
+    });
+    btn.addChild(bg, text);
+    this.body.addChild(btn);
+    return y + h + 10;
   }
 
   private formatRunSummary(summary: RunSummary): string {
@@ -262,10 +342,35 @@ export class SidePanel {
       `Kills: ${summary.killsTotal}  Boss: ${summary.bossKills}`,
       `Damage: ${top}`,
       `Memory earned: ${summary.memoryEarned}`,
+      `Towers used: ${summary.towersUsed}  Max upgrade: ${summary.highestUpgradeLevel}`,
       `Upgrades: ${summary.upgradesPurchased}  Sold: ${summary.towersSold}`,
       `Core damage: ${summary.coreDamageTaken}`,
-      `Max resonance: ${summary.maxResonanceTime.toFixed(1)}s`
+      `Max resonance: ${summary.maxResonanceTime.toFixed(1)}s`,
+      `Max synergies: ${summary.maxActiveSynergies}`
     ].join('\n');
+  }
+
+  private appendRunMeta(x: number, y: number): number {
+    if (!this.runConfig || !this.mapDefinition) return y;
+    const label = makeLabel('RUN CONFIG');
+    label.position.set(x, y);
+    this.body.addChild(label);
+    y += 18;
+    const text = makeText([
+      `Mode: ${CHALLENGE_MODE_LABEL[this.runConfig.mode]}`,
+      `Map: ${this.mapDefinition.name}`,
+      `Seed: ${this.runConfig.seed}`,
+      `Rules: ${this.runConfig.rules.join(' / ')}`
+    ].join('\n'), {
+      fontSize: 11,
+      fill: 0xc0c8d8,
+      wordWrap: true,
+      wordWrapWidth: PANEL_W - 36,
+      lineHeight: 16
+    });
+    text.position.set(x, y);
+    this.body.addChild(text);
+    return y + (text.height as number) + 12;
   }
 
   private appendStats(x: number, y: number, type: EmotionType, stats: TowerStats = TOWER_STATS[type]): number {
@@ -302,6 +407,55 @@ export class SidePanel {
     return y + 12;
   }
 
+  private appendTowerBrief(x: number, y: number, type: EmotionType, includeDescription = true): number {
+    const stats = TOWER_STATS[type];
+    const help = TOWER_HELP_COPY[type];
+    if (includeDescription) {
+      const desc = makeText(stats.description, {
+        fontSize: 12,
+        fill: 0xc0c8d8,
+        wordWrap: true,
+        wordWrapWidth: PANEL_W - 36,
+        lineHeight: 16
+      });
+      desc.position.set(x, y);
+      this.body.addChild(desc);
+      y += Math.max(20, desc.height as number) + 8;
+    }
+
+    const detail = [
+      `Category: ${TOWER_CATEGORY_LABEL[stats.category]}`,
+      `Role: ${help.role}`,
+      `Strong: ${help.strengths.join(' / ')}`,
+      `Weak: ${help.weaknesses.join(' / ')}`,
+      `Placement: ${help.placement}`
+    ].join('\n');
+    const box = new Graphics();
+    const detailText = makeText(detail, {
+      fontSize: 10,
+      fill: 0x9aa6bd,
+      wordWrap: true,
+      wordWrapWidth: PANEL_W - 56,
+      lineHeight: 14
+    });
+    const boxH = Math.max(86, (detailText.height as number) + 16);
+    box.roundRect(x, y, PANEL_W - 36, boxH, 7)
+      .fill({ color: 0x0a0f1a, alpha: 0.82 })
+      .stroke({ color: EMOTION_COLOR[type], width: 1, alpha: 0.48 });
+    detailText.position.set(x + 10, y + 8);
+    this.body.addChild(box, detailText);
+    return y + boxH + 14;
+  }
+
+  private defeatHints(wave: number, summary: RunSummary): string[] {
+    const hints: string[] = [];
+    if (summary.upgradesPurchased <= Math.max(1, Math.floor(wave / 7))) hints.push('Too few upgrades. Commit to one path on your most important towers.');
+    if (wave >= 10 && summary.bossKills === 0) hints.push('Low damage against bosses. Add Pride, Guilt, poison, or mixed upgraded damage.');
+    if (summary.maxResonanceTime < 2 && wave >= 6) hints.push('Try mixing emotions for local synergies and Resonance.');
+    if (summary.coreDamageTaken >= 6) hints.push('Too many leaks. Add earlier slow, fast targeting, or more damage near the final turns.');
+    return hints.slice(0, 2);
+  }
+
   private appendSynergy(x: number, y: number, synergies: EmotionType[]): number {
     const lbl = makeLabel(SIDE_PANEL_COPY.synergy);
     lbl.position.set(x, y); this.body.addChild(lbl);
@@ -335,7 +489,8 @@ export class SidePanel {
       return y + 22;
     }
 
-    for (const synergy of this.activeSynergies.slice(0, 6)) {
+    const maxDisplayed = 5;
+    for (const synergy of this.activeSynergies.slice(0, maxDisplayed)) {
       const title = makeText(synergy.label, { fontSize: 11, fill: 0x77ffaa, fontWeight: '700', letterSpacing: 1 });
       title.position.set(x, y);
       const desc = makeText(synergy.description, {
@@ -349,6 +504,15 @@ export class SidePanel {
       this.body.addChild(title, desc);
       y += Math.max(34, 18 + (desc.height as number));
     }
+
+    if (this.activeSynergies.length > maxDisplayed) {
+      const extraCount = this.activeSynergies.length - maxDisplayed;
+      const extraLabel = makeText(`+ ${extraCount} more`, { fontSize: 11, fill: 0x7d8ba6, fontWeight: '700' });
+      extraLabel.position.set(x, y);
+      this.body.addChild(extraLabel);
+      y += 20;
+    }
+
     return y + 4;
   }
 
@@ -485,7 +649,7 @@ export class SidePanel {
     role.position.set(10, 26);
     btn.addChild(role);
 
-    const levelText = `${active ? state.level : 0}/2`;
+    const levelText = `${active ? state.level : 0}/4`;
     const subText =
       locked ? SIDE_PANEL_COPY.lockedByOtherPath :
       maxed ? SIDE_PANEL_COPY.levelMax(levelText) :

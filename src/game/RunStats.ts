@@ -11,6 +11,9 @@ export interface RunSummary {
   maxResonanceTime: number;
   topDamageEmotion: EmotionType | null;
   topDamage: number;
+  highestUpgradeLevel: number;
+  maxActiveSynergies: number;
+  towersUsed: number;
 }
 
 export interface RunStatsJson extends RunSummary {
@@ -44,6 +47,8 @@ export class RunStats {
   coreDamageTaken = 0;
   bossKills = 0;
   maxResonanceTime = 0;
+  highestUpgradeLevel = 0;
+  maxActiveSynergies = 0;
   private currentResonanceTime = 0;
 
   recordKill(kind: EnemyKind, bounty: number, wave: number): void {
@@ -82,6 +87,14 @@ export class RunStats {
   recordUpgradePurchased(): void {
     this.upgradesPurchased++;
     this.addScore(75);
+  }
+
+  recordHighestUpgradeLevel(level: number): void {
+    this.highestUpgradeLevel = Math.max(this.highestUpgradeLevel, Math.max(0, Math.floor(level)));
+  }
+
+  recordActiveSynergies(count: number): void {
+    this.maxActiveSynergies = Math.max(this.maxActiveSynergies, Math.max(0, Math.floor(count)));
   }
 
   recordMemoryEarned(amount: number): void {
@@ -123,7 +136,10 @@ export class RunStats {
       coreDamageTaken: this.coreDamageTaken,
       maxResonanceTime: this.maxResonanceTime,
       topDamageEmotion,
-      topDamage
+      topDamage,
+      highestUpgradeLevel: this.highestUpgradeLevel,
+      maxActiveSynergies: this.maxActiveSynergies,
+      towersUsed: Object.values(this.towersBuiltByEmotion).filter((count) => count > 0).length
     };
   }
 

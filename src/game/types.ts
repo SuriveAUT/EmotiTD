@@ -1,6 +1,16 @@
 export type Vec2 = { x: number; y: number };
 export type UpgradePath = 'A' | 'B' | 'C';
 export type TargetingMode = 'first' | 'last' | 'strongest' | 'weakest' | 'fastest' | 'boss';
+export type TowerCategory = 'damage' | 'control' | 'support' | 'defense';
+
+export const TOWER_CATEGORIES: TowerCategory[] = ['damage', 'control', 'support', 'defense'];
+
+export const TOWER_CATEGORY_LABEL: Record<TowerCategory, string> = {
+  damage: 'DAMAGE',
+  control: 'CONTROL',
+  support: 'SUPPORT',
+  defense: 'DEFENSE'
+};
 
 export const TARGETING_MODES: TargetingMode[] = ['first', 'last', 'strongest', 'weakest', 'fastest', 'boss'];
 

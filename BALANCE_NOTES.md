@@ -1,60 +1,68 @@
 # EMOTICORE TD Balance Notes
 
-## Balance Pass 1 - 2026-05-07
+## Balance Pass 2 - Hard Mode Implementation (2026-05)
 
 ### Goals
-
-- Wave 1-5: light onboarding with enough Memory to try two to three early towers.
-- Wave 6-10: learning phase that introduces support pressure and the first heavy enemy checks.
-- Wave 10: first real boss test, not a hard wall.
-- Wave 11-20: build test for mixed tower coverage, upgrades, and support placement.
-- Wave 21-30: heavy final phase where missed counters and single-type builds should struggle.
-
-### Test Plan
-
-1. Start a standard run without DevTools and play waves 1-5 using two different opening builds.
-   - Expected: no core damage or only minor mistakes punished.
-   - Watch: whether Anger-only or Joy-only clears with too much leftover Memory.
-2. Play waves 6-10 with at least one support/control tower and one damage tower.
-   - Expected: Guilt Giant, Envy Leech, and Wave 10 boss require targeting/upgrades, but remain recoverable.
-   - Watch: whether Wave 10 boss survives too long without a boss/DoT/mark answer.
-3. Jump to waves 11, 15, 20 with DevTools and test mixed builds.
-   - Expected: mixed builds feel stronger through resonance/synergy, but single-type builds can still limp through with focused upgrades.
-   - Watch: whether Calm/Trust defensive stacking removes too much risk.
-4. Jump to waves 21, 25, 30 and test final-phase pressure.
-   - Expected: Void/Numb/Overthinker combinations force target selection and counter coverage.
-   - Watch: whether late enemy density causes visual clutter or unavoidable leaks.
-5. Use DevTools "LOG RUNSTATS JSON" after each segment.
-   - Compare damage by emotion, kills by enemy kind, memory earned, core damage taken, and max resonance time.
+- Make the game significantly harder but fair.
+- Create strong economy constraints to prevent infinite scaling.
+- Distinct tower base costs and clear investment choices.
+- Extend upgrades to 4-tiers to smooth out power spikes and give late-game progression.
+- Harder wave scaling and boss hp scaling.
 
 ### Major Changes
 
-- Tower costs were slightly normalized:
-  - Anger/Fear/Disgust/Guilt became a little more expensive to reduce trivial early damage stacking.
-  - Sadness/Calm/Hope/Trust became slightly cheaper to make control, support, and defensive mixed builds easier to enter.
-  - Damage values and mechanics were not changed.
-- Enemy base rewards were nudged up while several bulky enemy HP values were slightly reduced.
-  - This smooths early/mid economy without making raw tower DPS stronger.
-  - Spiral bounty increased so boss kills feel economically meaningful.
-- Wave HP scaling was split into phases instead of one linear formula.
-  - Waves 1-5 now scale gently.
-  - Waves 6-10 ramp into the first boss.
-  - Waves 11-20 increase steadily as the build test.
-  - Waves 21-30 escalate harder for final pressure.
-- Wave density was reduced in early and boss waves.
-  - Fewer early Doubtlings/Panic Runners and slightly wider spacing give players more time to learn.
-  - Boss waves now use fewer adds around the Spiral so the boss itself is the test.
-- Boss HP scaling was reduced for Wave 10 and made more gradual.
-  - Wave 10 should be a real check, not a run-ending wall.
-  - Wave 30 receives an extra boss scale bump for the final phase after static curve testing showed the boss wave had much lower total HP than waves 28-29.
-- Upgrade costs were re-tiered.
-  - High-output damage paths, chain scaling, poison/mark scaling, and boss-pressure upgrades cost more.
-  - Support/defensive first upgrades are slightly more accessible.
-  - Second upgrade levels are generally more expensive to delay snowballing.
+1. **Economy Constraints (Phase A & B)**
+   - Hard capped alpha balance: `startingMemory` reduced to 120.
+   - `interestPerWave` reduced to 0.015 and capped with `interestCap` at 25.
+   - `coreShieldMax` added (5 cap) and `stabilityRegenCapPerWave` added (1 cap).
+   - Enemy bounties significantly reduced across the board (e.g. Spiral bounty 230 -> 115).
+
+2. **Tower Differentiation (Phase C)**
+   - Towers completely re-priced into distinct tiers (Range: 76 - 148 memory).
+   - Cheap starters (Anger, Fear, Sadness) vs Premium Damage (Pride, Love, Hope).
+   - Re-balanced base damages, fire rates, and effects based on the new prices.
+
+3. **Wave Scaling (Phase D)**
+   - Exponential hp and boss scaling equations implemented.
+   - Reduced spacing (more density) to make waves harder to clear without proper area control.
+   - Reduced bonus memory from waves to choke player economy.
+
+4. **Expanded Upgrade Paths (Phase E & F)**
+   - Expanded all towers from 2 to 4 upgrade levels.
+   - Level 4 is extremely expensive but offers significant "capstone" style bonuses.
+
+5. **Clamp System (Phase G)**
+   - Added `clampStats` in `Tower.ts` to hardcap stats like range (max 350), fireRate (min 0.2), and other status effects so they do not scale infinitely.
+
+6. **UI Adjustments (Phase H)**
+   - Side panel now correctly shows 4 upgrade levels.
 
 ### Open Questions For Next Pass
+- Are 4 upgrade levels visually clear enough in the SidePanel?
+- Do the hard caps on Stability and Shield feel too restrictive for full defensive builds?
+- Can players reliably beat Wave 30 with the much harsher economy?
 
-- Does Anger still dominate early waves because splash handles density too efficiently?
-- Does Trust plus Calm create too much safety once both have defensive upgrades?
-- Is Wave 10 boss clearable with at least three distinct mixed-build openings?
-- Are Wave 21-30 enemy counts challenging without becoming unreadable?
+## Crowd Control Balance Pass (2026-05)
+
+### Problem
+- Slow and stun could chain hard enough to stop enemies for too long.
+- Sadness/Fear/Calm control builds were suppressing wave pressure and trivializing some bosses.
+
+### Changes
+- Added minimum movement speed after all slow effects:
+  - Normal enemies: at least 45% base speed.
+  - PanicRunner and VoidWraith: at least 55% base speed.
+  - Bosses: at least 65% base speed.
+  - NumbOne: at least 75% base speed.
+- Slow now uses only the strongest active multiplier; additional hits refresh duration without stacking strength.
+- Added per-enemy stun immunity after stun attempts, with longer protection for fast enemies, NumbOne, and bosses.
+- Added enemy config `slowResist` and `stunResist` values so elites and bosses have clear CC profiles.
+- Nerfed Fear base stun chance/duration and Sadness base slow strength/duration.
+- Reduced CC-heavy upgrade and synergy bonuses, especially Sadness + Calm, Fear + Calm, and Anger + Fear.
+- Calm and Love fire-rate buffs now apply at reduced strength to Fear and Sadness towers.
+
+### Expectation
+- Control remains strong against normal enemies, especially with good placement.
+- Bosses and NumbOne act as anti-CC checks.
+- Enemies continue moving under slow pressure.
+- Damage, path coverage, and target priority matter more again.

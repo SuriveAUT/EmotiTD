@@ -1,3 +1,4 @@
+import type { TowerCategory } from '../game/types';
 import { EmotionType } from '../game/types';
 
 /* ------------------------------------------------------------------ *
@@ -36,141 +37,154 @@ export interface TowerStats {
   prideIsolationDamageMul?: number;
   description: string;
   synergies: EmotionType[];
+  category: TowerCategory;
 }
 
 export const TOWER_STATS: Record<EmotionType, TowerStats> = {
   [EmotionType.Anger]: {
-    cost: 52,
-    damage: 26,
-    range: 130,
-    fireRate: 0.55,
+    cost: 76,
+    damage: 25,
+    range: 128,
+    fireRate: 0.58,
     projectileSpeed: 540,
-    splashRadius: 40,
+    splashRadius: 38,
     description: 'Splash damage. Short range, explosive hits.',
-    synergies: [EmotionType.Joy, EmotionType.Fear]
+    synergies: [EmotionType.Joy, EmotionType.Fear],
+    category: 'damage'
   },
   [EmotionType.Sadness]: {
-    cost: 58,
+    cost: 88,
     damage: 18,
     range: 220,
-    fireRate: 1.1,
+    fireRate: 1.15,
     projectileSpeed: 460,
-    slowAmount: 0.55,
-    slowDuration: 1.4,
+    slowAmount: 0.72,
+    slowDuration: 1.00,
     description: 'Long range and reliable slows.',
-    synergies: [EmotionType.Calm, EmotionType.Fear]
+    synergies: [EmotionType.Calm, EmotionType.Fear],
+    category: 'control'
   },
   [EmotionType.Joy]: {
-    cost: 72,
-    damage: 16,
+    cost: 104,
+    damage: 17,
     range: 160,
-    fireRate: 0.85,
+    fireRate: 0.86,
     projectileSpeed: 620,
     chainCount: 3,
-    chainRange: 110,
+    chainRange: 105,
     description: 'Chains between enemies.',
-    synergies: [EmotionType.Calm, EmotionType.Anger]
+    synergies: [EmotionType.Calm, EmotionType.Anger],
+    category: 'damage'
   },
   [EmotionType.Fear]: {
-    cost: 58,
-    damage: 12,
+    cost: 82,
+    damage: 14,
     range: 140,
-    fireRate: 0.7,
+    fireRate: 0.68,
     projectileSpeed: 500,
-    fearChance: 0.35,
-    stunDuration: 0.6,
+    fearChance: 0.20,
+    stunDuration: 0.40,
     description: 'Briefly stuns enemies for crowd control.',
-    synergies: [EmotionType.Sadness, EmotionType.Anger]
+    synergies: [EmotionType.Sadness, EmotionType.Anger],
+    category: 'control'
   },
   [EmotionType.Calm]: {
-    cost: 62,
-    damage: 5,
+    cost: 112,
+    damage: 4,
     range: 150,
-    fireRate: 1.4,
+    fireRate: 1.45,
     projectileSpeed: 380,
-    buffRadius: 130,
-    buffFireRate: 0.78,
+    buffRadius: 125,
+    buffFireRate: 0.86,
     description: 'Buffs nearby towers.',
-    synergies: [EmotionType.Sadness, EmotionType.Joy]
+    synergies: [EmotionType.Sadness, EmotionType.Joy],
+    category: 'support'
   },
   [EmotionType.Hope]: {
-    cost: 72,
-    damage: 15,
+    cost: 122,
+    damage: 14,
     range: 175,
-    fireRate: 0.95,
+    fireRate: 1.00,
     projectileSpeed: 560,
-    numbDamageMul: 1.85,
+    numbDamageMul: 1.75,
     description: 'Starlight against numb enemies.',
-    synergies: [EmotionType.Calm, EmotionType.Joy, EmotionType.Sadness]
+    synergies: [EmotionType.Calm, EmotionType.Joy, EmotionType.Sadness],
+    category: 'support'
   },
   [EmotionType.Disgust]: {
-    cost: 70,
-    damage: 9,
+    cost: 96,
+    damage: 8,
     range: 150,
-    fireRate: 0.95,
+    fireRate: 1.00,
     projectileSpeed: 500,
-    poisonDps: 6,
-    poisonDuration: 2.4,
-    armorShred: 1.12,
-    armorShredDuration: 1.6,
+    poisonDps: 5.2,
+    poisonDuration: 2.2,
+    armorShred: 1.10,
+    armorShredDuration: 1.45,
     description: 'Poison, damage over time and armor shred.',
-    synergies: [EmotionType.Sadness, EmotionType.Fear, EmotionType.Calm]
+    synergies: [EmotionType.Sadness, EmotionType.Fear, EmotionType.Calm],
+    category: 'damage'
   },
   [EmotionType.Guilt]: {
-    cost: 74,
-    damage: 14,
+    cost: 116,
+    damage: 13,
     range: 165,
-    fireRate: 1.05,
+    fireRate: 1.10,
     projectileSpeed: 540,
-    guiltMark: 0.11,
-    guiltExecuteThreshold: 0.12,
+    guiltMark: 0.095,
+    guiltExecuteThreshold: 0.10,
     description: 'Marks targets. Repeated hits escalate.',
-    synergies: [EmotionType.Anger, EmotionType.Fear, EmotionType.Hope]
+    synergies: [EmotionType.Anger, EmotionType.Fear, EmotionType.Hope],
+    category: 'control'
   },
   [EmotionType.Trust]: {
-    cost: 60,
-    damage: 6,
-    range: 170,
-    fireRate: 1.15,
+    cost: 92,
+    damage: 5,
+    range: 165,
+    fireRate: 1.25,
     projectileSpeed: 440,
-    coreShield: 0.35,
-    trustAnchorDuration: 0.85,
+    coreShield: 0.25,
+    trustAnchorDuration: 0.70,
     description: 'Defensive Core shielding, low damage.',
-    synergies: [EmotionType.Calm, EmotionType.Hope, EmotionType.Joy]
+    synergies: [EmotionType.Calm, EmotionType.Hope, EmotionType.Joy],
+    category: 'defense'
   },
   [EmotionType.Shame]: {
-    cost: 68,
-    damage: 11,
+    cost: 106,
+    damage: 12,
     range: 155,
     fireRate: 0.78,
     projectileSpeed: 520,
-    shameGroupRadius: 64,
-    shameGroupDamageMul: 1.38,
-    splashRadius: 24,
+    shameGroupRadius: 60,
+    shameGroupDamageMul: 1.30,
+    splashRadius: 22,
     description: 'Groups take more damage when packed together.',
-    synergies: [EmotionType.Fear, EmotionType.Disgust, EmotionType.Love]
+    synergies: [EmotionType.Fear, EmotionType.Disgust, EmotionType.Love],
+    category: 'control'
   },
   [EmotionType.Love]: {
-    cost: 76,
-    damage: 7,
+    cost: 132,
+    damage: 6,
     range: 145,
-    fireRate: 1.25,
+    fireRate: 1.30,
     projectileSpeed: 420,
-    loveLinkRadius: 150,
-    loveFireRateMul: 0.88,
-    loveDamageMul: 1.10,
+    loveLinkRadius: 145,
+    loveFireRateMul: 0.91,
+    loveDamageMul: 1.07,
     description: 'Links nearby synergy partners with tempo and damage buffs.',
-    synergies: [EmotionType.Joy, EmotionType.Trust, EmotionType.Shame]
+    synergies: [EmotionType.Joy, EmotionType.Trust, EmotionType.Shame],
+    category: 'support'
   },
   [EmotionType.Pride]: {
-    cost: 82,
-    damage: 38,
+    cost: 148,
+    damage: 42,
     range: 185,
-    fireRate: 1.35,
+    fireRate: 1.45,
     projectileSpeed: 660,
     prideIsolationRadius: 95,
-    prideIsolationDamageMul: 1.32,
+    prideIsolationDamageMul: 1.25,
     description: 'High single-target boss damage, stronger when isolated.',
-    synergies: [EmotionType.Anger, EmotionType.Guilt, EmotionType.Love]
+    synergies: [EmotionType.Anger, EmotionType.Guilt, EmotionType.Love],
+    category: 'damage'
   }
 };

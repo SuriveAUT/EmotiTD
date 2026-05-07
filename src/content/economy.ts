@@ -2,10 +2,13 @@
  *  Economy
  * ------------------------------------------------------------------ */
 export const ECONOMY = {
-  startingMemory: 155,
-  startingStability: 20,
-  waveCompleteBonus: 24,
-  interestPerWave: 0.04
+  startingMemory: 90,
+  startingStability: 18,
+  waveCompleteBonus: 4,
+  interestPerWave: 0.012,
+  interestCap: 18,
+  coreShieldMax: 5,
+  stabilityRegenCapPerWave: 1
 } as const;
 
 /* ------------------------------------------------------------------ *

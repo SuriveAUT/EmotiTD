@@ -2,6 +2,8 @@ import { BALANCE } from './config';
 import { EMOTION_TYPES, EmotionType } from './types';
 
 export class EmotionalBalance {
+  private synergyPowerModifier = 1;
+  private singleEmotionPenaltyModifier = 1;
   readonly counts: Record<EmotionType, number> = {
     [EmotionType.Anger]: 0,
     [EmotionType.Sadness]: 0,
@@ -20,6 +22,11 @@ export class EmotionalBalance {
   add(t: EmotionType) { this.counts[t]++; }
   remove(t: EmotionType) {
     if (this.counts[t] > 0) this.counts[t]--;
+  }
+
+  setChallengeModifiers(synergyPowerModifier = 1, singleEmotionPenaltyModifier = 1): void {
+    this.synergyPowerModifier = synergyPowerModifier;
+    this.singleEmotionPenaltyModifier = singleEmotionPenaltyModifier;
   }
 
   uniqueCount(): number {
@@ -53,13 +60,15 @@ export class EmotionalBalance {
   /** damage multiplier applied to towers of `type` */
   damageMulFor(type: EmotionType): number {
     let mul = 1;
-    if (this.isResonating()) mul *= BALANCE.resonanceDamageMult;
-    if (this.dominant() === type) mul *= BALANCE.imbalanceDamageMult;
+    if (this.isResonating()) mul *= 1 + ((BALANCE.resonanceDamageMult - 1) * this.synergyPowerModifier);
+    if (this.dominant() === type) mul *= 1 - ((1 - BALANCE.imbalanceDamageMult) * this.singleEmotionPenaltyModifier);
     return mul;
   }
 
   /** fire rate multiplier (lower = faster) for resonance */
   fireRateMul(): number {
-    return this.isResonating() ? BALANCE.resonanceFireRateMult : 1;
+    return this.isResonating()
+      ? 1 - ((1 - BALANCE.resonanceFireRateMult) * this.synergyPowerModifier)
+      : 1;
   }
 }

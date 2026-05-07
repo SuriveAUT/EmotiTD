@@ -24,10 +24,10 @@ export class Enemy {
   /** flagged once death rewards have been paid out */
   rewarded = false;
 
-  /** scale on base speed (1 = normal, < 1 = slower) */
   private slowMul = 1;
   private slowTimer = 0;
   private stunTimer = 0;
+  private stunImmunityTimer = 0;
   private hasteMul = 1;
   private hasteTimer = 0;
   /** 0..1, glitch wobble amount when feared */
@@ -339,13 +339,10 @@ export class Enemy {
     }
     this.flashTimer = 0.08;
     if (packet.slow !== undefined && Math.random() < 1) {
-      const slow = this.kind === EnemyKind.NumbOne ? 0.86 + packet.slow * 0.14 : packet.slow;
-      const duration = (packet.slowDuration ?? 1) * (this.kind === EnemyKind.NumbOne ? 0.28 : 1);
-      this.applySlow(slow, duration);
+      this.applySlow(packet.slow, packet.slowDuration ?? 1);
     }
     if (packet.fearChance !== undefined && Math.random() < packet.fearChance) {
-      const duration = (packet.stunDuration ?? 0.5) * (this.kind === EnemyKind.NumbOne ? 0.22 : 1);
-      if (duration > 0.04) this.applyStun(duration);
+      this.applyStun(packet.stunDuration ?? 0.5);
     }
     if (this.hp <= 0) {
       this.alive = false;
@@ -372,18 +369,45 @@ export class Enemy {
 
   /** applied slow: enemy speed *= mul for `duration` seconds (only stronger overrides) */
   applySlow(mul: number, duration: number) {
-    if (mul < this.slowMul) this.slowMul = mul;
+    if (duration <= 0) return;
+    const resist = ENEMY_STATS[this.kind].slowResist ?? 0;
+    const resistedMul = 1 - ((1 - mul) * (1 - resist));
+    const effectiveMul = Math.max(this.minSpeedMultiplier(), Math.min(1, resistedMul));
+    if (effectiveMul < this.slowMul) this.slowMul = effectiveMul;
     if (duration > this.slowTimer) this.slowTimer = duration;
   }
 
   applyStun(duration: number) {
-    if (duration > this.stunTimer) this.stunTimer = duration;
+    if (this.stunImmunityTimer > 0) return;
+    const resist = ENEMY_STATS[this.kind].stunResist ?? 0;
+    let effectiveDuration = duration * (1 - resist);
+    if (isBossKind(this.kind)) effectiveDuration = Math.min(0.25, effectiveDuration * 0.25);
+    if (!isBossKind(this.kind) && effectiveDuration <= 0.04) {
+      this.stunImmunityTimer = Math.max(this.stunImmunityTimer, this.stunImmunityDuration());
+      return;
+    }
+    if (effectiveDuration > this.stunTimer) this.stunTimer = effectiveDuration;
+    this.stunImmunityTimer = effectiveDuration + this.stunImmunityDuration();
     this.fearWobble = 1;
   }
 
   applySpeedBoost(mult: number, duration: number) {
     if (mult > this.hasteMul) this.hasteMul = mult;
     if (duration > this.hasteTimer) this.hasteTimer = duration;
+  }
+
+  private minSpeedMultiplier(): number {
+    if (isBossKind(this.kind)) return 0.65;
+    if (this.kind === EnemyKind.NumbOne) return 0.75;
+    if (this.kind === EnemyKind.PanicRunner || this.kind === EnemyKind.VoidWraith) return 0.55;
+    return 0.45;
+  }
+
+  private stunImmunityDuration(): number {
+    if (isBossKind(this.kind)) return 5.0;
+    if (this.kind === EnemyKind.NumbOne) return 6.0;
+    if (this.kind === EnemyKind.PanicRunner || this.kind === EnemyKind.VoidWraith) return 2.8;
+    return 2.5;
   }
 
   /** boss spawns child enemies — Game polls and clears */
@@ -484,8 +508,12 @@ export class Enemy {
       dodgeOffset = Math.sin((this.dodgeTimer / 0.28) * Math.PI) * 11 * this.dodgeSide;
     }
 
+    if (this.stunImmunityTimer > 0) {
+      this.stunImmunityTimer = Math.max(0, this.stunImmunityTimer - dt);
+    }
+
     if (this.stunTimer > 0) {
-      this.stunTimer -= dt;
+      this.stunTimer = Math.max(0, this.stunTimer - dt);
       // glitch jitter
       this.body.x = (Math.random() - 0.5) * 4;
       this.body.y = (Math.random() - 0.5) * 4;
@@ -496,7 +524,8 @@ export class Enemy {
       this.body.x = -Math.sin(this.angle) * dodgeOffset;
       this.body.y = Math.cos(this.angle) * dodgeOffset;
       const panicMul = this.panicBoostTimer > 0 ? 1.34 : 1;
-      const speed = this.baseSpeed * this.slowMul * this.hasteMul * panicMul;
+      const slowedSpeed = this.baseSpeed * this.slowMul * this.hasteMul * panicMul;
+      const speed = Math.max(this.baseSpeed * this.minSpeedMultiplier(), slowedSpeed);
       this.traveled += speed * dt;
     }
 

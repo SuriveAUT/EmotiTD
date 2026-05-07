@@ -1,4 +1,5 @@
 import { EnemyKind } from './types';
+import type { RunConfig } from './RunConfig';
 
 export interface SpawnGroup {
   kind: EnemyKind;
@@ -37,45 +38,49 @@ const R = EnemyKind.BurnoutBoss;
 const previewCache = new Map<number, WaveDef>();
 
 function hpScaleFor(number: number): number {
-  const tier = Math.max(0, number - 1);
-  if (number <= 5) return 1 + tier * 0.035;
-  if (number <= 10) return 1.14 + (number - 5) * 0.045;
-  if (number <= 20) return 1.36 + (number - 10) * 0.055;
-  return 1.91 + (number - 20) * 0.065;
+  if (number <= 5) return 1 + (number - 1) * 0.055;
+  if (number <= 10) return 1.22 + (number - 5) * 0.095;
+  if (number <= 20) return 1.70 + (number - 10) * 0.13;
+  if (number <= 30) return 3.00 + (number - 20) * 0.17;
+  return 4.70 * Math.pow(1.075, number - 30);
 }
 
 function spacingDensityFor(number: number): number {
-  const tier = Math.max(0, number - 1);
-  if (number <= 5) return 1.04 - tier * 0.025;
-  if (number <= 10) return 0.92 - (number - 6) * 0.018;
-  if (number <= 20) return 0.82 - (number - 11) * 0.014;
-  return Math.max(0.42, 0.68 - (number - 21) * 0.018);
+  if (number <= 5) return 1.02 - (number - 1) * 0.025;
+  if (number <= 10) return 0.90 - (number - 6) * 0.02;
+  if (number <= 20) return 0.78 - (number - 11) * 0.014;
+  return Math.max(0.38, 0.64 - (number - 21) * 0.017);
 }
 
 function bossHpScaleFor(number: number): number {
-  const base = 0.72 + number * 0.038;
-  return number >= 30 ? base + 0.65 : base;
+  if (number <= 10) return 1.35 + number * 0.03;
+  if (number <= 20) return 1.65 + (number - 10) * 0.09;
+  if (number <= 30) return 2.55 + (number - 20) * 0.115;
+  return 3.70 * Math.pow(1.09, number - 30);
 }
 
-export function bossKindForWave(number: number): EnemyKind {
-  if (number <= 10) return X;
-  if (number <= 20) return M;
-  if (number <= 30) return R;
-  const cycle = Math.floor(number / 10 - 1) % 3;
+export function bossKindForWave(number: number, bossFrequency = 10): EnemyKind {
+  const bossIndex = Math.max(1, Math.floor(number / bossFrequency));
+  if (bossIndex === 1) return X;
+  if (bossIndex === 2) return M;
+  if (bossIndex === 3) return R;
+  const cycle = (bossIndex - 1) % 3;
   return cycle === 0 ? X : cycle === 1 ? M : R;
 }
 
-export function generateWave(number: number): WaveDef {
-  const cached = previewCache.get(number);
+export function generateWave(number: number, config?: RunConfig): WaveDef {
+  const useCache = !config || config.mode === 'standard';
+  const cached = useCache ? previewCache.get(number) : undefined;
   if (cached) return cached;
 
   const hpScale = hpScaleFor(number);
   const density = spacingDensityFor(number);
-  const bossWave = number % 10 === 0;
+  const bossFrequency = config?.bossFrequency ?? 10;
+  const bossWave = number % bossFrequency === 0;
   const groups: SpawnGroup[] = [];
 
   if (bossWave) {
-    const bossKind = bossKindForWave(number);
+    const bossKind = bossKindForWave(number, bossFrequency);
     groups.push(
       { kind: D, count: 6 + Math.floor(number * 0.45), spacing: Math.max(0.32, density * 0.78), delay: 0, hpScale: hpScale * 0.86 },
       { kind: bossKind, count: 1, spacing: 1, delay: 4, hpScale: bossHpScaleFor(number) },
@@ -86,7 +91,7 @@ export function generateWave(number: number): WaveDef {
     if (number >= 30) groups.push({ kind: E, count: 2 + Math.floor(number / 18), spacing: 2.4, delay: 14, hpScale });
     if (number >= 40) groups.push({ kind: N, count: 3 + Math.floor(number / 18), spacing: 1.7, delay: 16, hpScale: hpScale * 0.88 });
   } else {
-    groups.push({ kind: D, count: 5 + Math.floor(number * 1.0), spacing: Math.max(0.36, density), delay: 0, hpScale });
+    groups.push({ kind: D, count: 5 + Math.floor(number * 1.1), spacing: Math.max(0.36, density), delay: 0, hpScale });
 
     if (number >= 3) {
       groups.push({ kind: P, count: 1 + Math.floor(number * 0.38), spacing: Math.max(0.46, density * 0.95), delay: 3.5, hpScale: hpScale * 0.86 });
@@ -116,12 +121,30 @@ export function generateWave(number: number): WaveDef {
 
   const def: WaveDef = {
     number,
-    groups: groups.sort((a, b) => a.delay - b.delay),
+    groups: applyConfigToGroups(groups, config).sort((a, b) => a.delay - b.delay),
     isBoss: bossWave,
-    bonusMemory: bossWave ? 70 + Math.floor(number * 3.5) : number % 5 === 0 ? 24 + Math.floor(number * 1.5) : undefined
+    bonusMemory: applyWaveBonusModifier(bossWave ? 38 + Math.floor(number * 2.1) : number % 5 === 0 ? 10 + Math.floor(number * 0.8) : undefined, config)
   };
-  previewCache.set(number, def);
+  if (useCache) previewCache.set(number, def);
   return def;
+}
+
+function applyConfigToGroups(groups: SpawnGroup[], config?: RunConfig): SpawnGroup[] {
+  const hpMul = config?.enemyHpModifier ?? 1;
+  const reduceBossRushAdds = config?.mode === 'bossRush';
+  return groups.map((group) => {
+    const isBoss = group.kind === X || group.kind === M || group.kind === R;
+    return {
+      ...group,
+      count: reduceBossRushAdds && !isBoss ? Math.max(1, Math.floor(group.count * 0.82)) : group.count,
+      hpScale: (group.hpScale ?? 1) * hpMul
+    };
+  });
+}
+
+function applyWaveBonusModifier(value: number | undefined, config?: RunConfig): number | undefined {
+  if (value === undefined) return undefined;
+  return Math.max(0, Math.floor(value * (config?.waveBonusModifier ?? 1)));
 }
 
 export class WaveManager {
@@ -130,6 +153,7 @@ export class WaveManager {
   elapsed = 0;
   private queue: Pending[] = [];
   private maxWave: number | null;
+  private config: RunConfig | null = null;
 
   constructor(maxWave: number | null = null) {
     this.maxWave = maxWave;
@@ -142,14 +166,19 @@ export class WaveManager {
     this.maxWave = maxWave;
   }
 
+  setRunConfig(config: RunConfig): void {
+    this.config = config;
+    this.maxWave = config.maxWave ?? null;
+  }
+
   currentDef(): WaveDef | null {
     if (this.current === 0) return null;
-    return generateWave(this.current);
+    return generateWave(this.current, this.config ?? undefined);
   }
 
   nextDef(): WaveDef | null {
     if (this.maxWave !== null && this.current >= this.maxWave) return null;
-    return generateWave(this.current + 1);
+    return generateWave(this.current + 1, this.config ?? undefined);
   }
 
   start(n: number) {
@@ -158,7 +187,7 @@ export class WaveManager {
     this.active = true;
     this.elapsed = 0;
     this.queue = [];
-    const def = generateWave(n);
+    const def = generateWave(n, this.config ?? undefined);
     for (const g of def.groups) {
       for (let i = 0; i < g.count; i++) {
         this.queue.push({
