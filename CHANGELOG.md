@@ -8,6 +8,8 @@ First playable alpha. The core loop is ready for release validation.
 
 ### Added
 
+- Local run auto-save and resume support for reloads, tab closes and mobile save-and-quit flow.
+- Main Menu resume entry showing saved mode, map, wave, score and saved time.
 - Premium UI polish pass with a shared dark-neon UI theme, smoother panel styling and improved visual consistency.
 - Scene fade transitions between menus, game, settings, how-to-play and run-end navigation.
 - Animated main menu refinements: intro fade, stronger vignette, premium cards and selected-state glow.
@@ -47,3 +49,11 @@ First playable alpha. The core loop is ready for release validation.
 
 - Vite production build without sourcemaps.
 - `npm run typecheck` as a separate step and as a pre-step of `npm run build`.
+
+### Fixed
+
+- Mobile placement now resolves the tapped cell directly on `pointerdown`, so a selected tower can be placed with one tap instead of depending on stale hover state.
+- UI panels stop propagation more consistently, preventing TowerBar and SidePanel touches from leaking into map placement/deselect handling.
+- TowerBar, Main Menu and SidePanel touch targets are larger and safer for mobile input.
+- SidePanel scroll position is preserved per selected tower across combat refreshes, upgrades and targeting changes.
+- Current runs are cleared safely on victory, defeat, reset and intentional new-run overwrite.

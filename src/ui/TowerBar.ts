@@ -72,6 +72,7 @@ class TowerButton {
     this.container = new Container();
     this.container.eventMode = 'static';
     this.container.cursor = 'pointer';
+    this.container.hitArea = { contains: (x: number, y: number) => x >= -4 && x <= BUTTON_W + 4 && y >= -4 && y <= BUTTON_H + 4 } as any;
     this.bg = new Graphics();
     this.icon = new Graphics();
     this.container.addChild(this.bg, this.icon);
@@ -285,6 +286,7 @@ class CategoryTab {
     this.container = new Container();
     this.container.eventMode = 'static';
     this.container.cursor = 'pointer';
+    this.container.hitArea = { contains: (x: number, y: number) => x >= -4 && x <= TAB_W + 4 && y >= -10 && y <= TAB_H + 10 } as any;
     this.bg = new Graphics();
     this.label = makeText(TOWER_CATEGORY_LABEL[category], {
       fontSize: 9,
@@ -401,6 +403,9 @@ export class TowerBar {
     this.container = new Container();
     this.container.label = 'tower-bar';
     this.container.y = CANVAS.height - CANVAS.towerBarHeight;
+    this.container.eventMode = 'static';
+    this.container.hitArea = { contains: (x: number, y: number) => x >= 0 && x <= CANVAS.width && y >= 0 && y <= CANVAS.towerBarHeight } as any;
+    this.container.on('pointerdown', (e: FederatedPointerEvent) => e.stopPropagation());
     this.tooltip = new TowerTooltip();
 
     const bg = new Graphics();
@@ -465,6 +470,7 @@ export class TowerBar {
     this.startBtn = new Container();
     this.startBtn.eventMode = 'static';
     this.startBtn.cursor = 'pointer';
+    this.startBtn.hitArea = { contains: (x: number, y: number) => x >= -8 && x <= 180 && y >= -8 && y <= 64 } as any;
     this.startBg = new Graphics();
     this.startBtn.addChild(this.startBg);
     const label = makeText(`>  ${TOWER_BAR_COPY.startWave}`, { fontSize: 14, fontWeight: '700', letterSpacing: 3, fill: 0x05070d });

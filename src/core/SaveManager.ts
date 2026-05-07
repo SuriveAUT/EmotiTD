@@ -1,3 +1,7 @@
+import type { RunConfig } from '../game/RunConfig';
+import type { RunStatsJson } from '../game/RunStats';
+import type { EmotionType, TargetingMode, UpgradePath } from '../game/types';
+
 export type QualitySetting = 'low' | 'medium' | 'high';
 
 export interface SaveSettings {
@@ -26,8 +30,39 @@ export interface SaveData {
   lastChallengeSeed?: string;
 }
 
+export interface CurrentRunTowerSave {
+  id: string;
+  emotion: EmotionType;
+  x: number;
+  y: number;
+  gridX: number;
+  gridY: number;
+  selectedPath: UpgradePath | null;
+  pathLevel: number;
+  targetingMode: TargetingMode;
+  totalSpent: number;
+}
+
+export interface CurrentRunSave {
+  version: number;
+  savedAt: string;
+  runConfig: RunConfig;
+  gameState: {
+    memory: number;
+    stability: number;
+    wave: number;
+    score: number;
+    waveInProgress: boolean;
+    restoredFromWaveStart?: boolean;
+  };
+  towers: CurrentRunTowerSave[];
+  runStats: RunStatsJson;
+}
+
 const SAVE_KEY = 'emoticore-td-save';
+const CURRENT_RUN_KEY = 'emoticore-td-current-run';
 const SAVE_VERSION = 1;
+const CURRENT_RUN_VERSION = 1;
 
 const DEFAULT_SAVE_DATA: SaveData = {
   version: SAVE_VERSION,
@@ -86,6 +121,7 @@ export class SaveManager {
   reset(): SaveData {
     this.data = structuredClone(DEFAULT_SAVE_DATA);
     this.save();
+    this.clearCurrentRun();
     return this.getData();
   }
 
@@ -131,6 +167,35 @@ export class SaveManager {
 
   getData(): SaveData {
     return structuredClone(this.data);
+  }
+
+  saveCurrentRun(run: Omit<CurrentRunSave, 'version' | 'savedAt'>): void {
+    const payload: CurrentRunSave = {
+      ...run,
+      version: CURRENT_RUN_VERSION,
+      savedAt: new Date().toISOString()
+    };
+    window.localStorage.setItem(CURRENT_RUN_KEY, JSON.stringify(payload));
+  }
+
+  loadCurrentRun(): CurrentRunSave | null {
+    try {
+      const raw = window.localStorage.getItem(CURRENT_RUN_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Partial<CurrentRunSave>;
+      if (parsed.version !== CURRENT_RUN_VERSION || !parsed.runConfig || !parsed.gameState || !Array.isArray(parsed.towers) || !parsed.runStats) {
+        this.clearCurrentRun();
+        return null;
+      }
+      return parsed as CurrentRunSave;
+    } catch {
+      this.clearCurrentRun();
+      return null;
+    }
+  }
+
+  clearCurrentRun(): void {
+    window.localStorage.removeItem(CURRENT_RUN_KEY);
   }
 
   private normalize(data: Partial<SaveData>): SaveData {

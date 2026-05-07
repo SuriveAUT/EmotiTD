@@ -21,6 +21,7 @@ Included alpha features:
 - Premium dark-neon UI polish with animated menus, smoother scene transitions, clearer HUD feedback and richer combat impacts.
 - Main Menu, Tutorial, How To Play, Settings, Credits.
 - Save/highscore persistence via LocalStorage.
+- Running games are auto-saved locally and can be resumed after reload.
 - Run Summary after victory and defeat.
 - Boss intro and defeat state.
 
@@ -63,6 +64,20 @@ npm run preview
 ```
 
 Serves the built `dist/` output locally for release checks.
+
+## Deploy
+
+```bash
+npm run deploy:server
+```
+
+Builds with base `/emoticore-td/`, copies release docs into `dist/release-docs`, uploads to SSH host `server`, and replaces `/var/www/html/emoticore-td`.
+
+Optional manual form:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/deploy-server.ps1 -SshHost server -RemoteDir /var/www/html/emoticore-td -BasePath /emoticore-td/
+```
 
 ## Typecheck
 

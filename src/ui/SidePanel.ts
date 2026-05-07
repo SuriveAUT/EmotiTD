@@ -51,6 +51,10 @@ export class SidePanel {
   private mapDefinition: MapDefinition | null = null;
   private scrollY = 0;
   private contentHeight = 0;
+  private currentViewKey = 'init';
+  private readonly scrollYByViewKey = new Map<string, number>();
+  private touchScrollActive = false;
+  private touchScrollLastY = 0;
 
   constructor(callbacks: SidePanelCallbacks) {
     this.callbacks = callbacks;
@@ -72,6 +76,20 @@ export class SidePanel {
     /* wheel handling — federated events bubble from children */
     this.container.eventMode = 'static';
     this.container.hitArea = new Rectangle(PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
+    this.container.on('pointerdown', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.touchScrollActive = true;
+      this.touchScrollLastY = e.global.y;
+    });
+    this.container.on('pointermove', (e: FederatedPointerEvent) => {
+      if (!this.touchScrollActive) return;
+      e.stopPropagation();
+      const dy = this.touchScrollLastY - e.global.y;
+      this.touchScrollLastY = e.global.y;
+      this.scrollByDelta(dy * 2);
+    });
+    this.container.on('pointerup', () => { this.touchScrollActive = false; });
+    this.container.on('pointerupoutside', () => { this.touchScrollActive = false; });
     this.container.on('wheel', (e: FederatedWheelEvent) => {
       const px = e.global.x;
       const py = e.global.y;
@@ -96,9 +114,11 @@ export class SidePanel {
     g.rect(PANEL_X + 2, PANEL_Y + SCROLL_PAD_TOP, PANEL_W - 4, VIEWPORT_H).fill({ color: 0xffffff, alpha: 1 });
   }
 
-  clear() {
+  clear(viewKey = 'default') {
+    this.saveScrollForCurrentView();
     this.body.removeChildren();
-    this.scrollY = 0;
+    this.currentViewKey = viewKey;
+    this.scrollY = this.scrollYByViewKey.get(viewKey) ?? 0;
     this.body.y = 0;
     this.contentHeight = 0;
     this.scrollBar.clear();
@@ -114,7 +134,7 @@ export class SidePanel {
   }
 
   showSelectedType(type: EmotionType, affordable: boolean) {
-    this.clear();
+    this.clear(`placement:${type}`);
     const stats = TOWER_STATS[type];
     const c = EMOTION_COLOR[type];
     const x = PANEL_X + 18;
@@ -143,7 +163,7 @@ export class SidePanel {
   }
 
   showSelectedTower(t: Tower, memory: number) {
-    this.clear();
+    this.clear(`tower:${t.cx}:${t.cy}`);
     const c = EMOTION_COLOR[t.type];
     const x = PANEL_X + 18;
     let y = PANEL_Y + 22;
@@ -174,7 +194,7 @@ export class SidePanel {
   }
 
   showWavePreview(next: WaveDef | null, current: WaveDef | null, between: boolean) {
-    this.clear();
+    this.clear(`wave:${between ? 'next' : 'current'}:${between ? next?.number ?? 0 : current?.number ?? 0}`);
     const x = PANEL_X + 18;
     let y = PANEL_Y + 22;
 
@@ -238,7 +258,7 @@ export class SidePanel {
   }
 
   showVictory(summary?: RunSummary) {
-    this.clear();
+    this.clear('victory');
     const x = PANEL_X + 18;
     let y = PANEL_Y + 60;
     const t1 = makeHeadline(SIDE_PANEL_COPY.victoryTitle, { fontSize: 36, fill: 0x77ffaa, letterSpacing: 8 });
@@ -258,7 +278,7 @@ export class SidePanel {
   }
 
   showDefeat(wave = 0, summary?: RunSummary) {
-    this.clear();
+    this.clear('defeat');
     const x = PANEL_X + 18;
     let y = PANEL_Y + 60;
     const t1 = makeHeadline(SIDE_PANEL_COPY.defeatTitle, { fontSize: 24, fill: 0xff5577, letterSpacing: 4 });
@@ -743,6 +763,11 @@ export class SidePanel {
     this.scrollY += deltaY * 0.5;
     this.applyScrollClamp();
     this.drawScrollBar();
+    this.saveScrollForCurrentView();
+  }
+
+  private saveScrollForCurrentView(): void {
+    this.scrollYByViewKey.set(this.currentViewKey, this.scrollY);
   }
 
   private applyScrollClamp(): void {

@@ -2,7 +2,7 @@ import { Application, Container, Graphics, Rectangle, Text } from 'pixi.js';
 import { audioManager } from '../core/AudioManager';
 import type { Scene } from '../core/Scene';
 import type { SceneManager } from '../core/SceneManager';
-import { saveManager, type SaveData } from '../core/SaveManager';
+import { saveManager, type CurrentRunSave, type SaveData } from '../core/SaveManager';
 import { APP_VERSION } from '../core/version';
 import { CANVAS, COLORS, DEFAULT_MAP, EMOTION_COLOR, EMOTION_LABEL, MAP_LIST, MAP_MODIFIER_COPY, MENU_COPY, type MapDefinition } from '../game/config';
 import { EmotionType } from '../game/types';
@@ -55,6 +55,8 @@ export class MainMenuScene implements Scene {
   private bestWaveText: Text | null = null;
   private modeInfoText: Text | null = null;
   private resetConfirm: Container | null = null;
+  private currentRunSave: CurrentRunSave | null = null;
+  private pendingNewRunConfirm = false;
 
   constructor(app: Application, sceneManager: SceneManager) {
     this.app = app;
@@ -63,6 +65,7 @@ export class MainMenuScene implements Scene {
 
   init(): void {
     this.saveData = saveManager.load();
+    this.currentRunSave = saveManager.loadCurrentRun();
     audioManager.applySettings(this.saveData.settings);
     audioManager.playMusic('menu-theme');
     this.createParticles();
@@ -164,18 +167,14 @@ export class MainMenuScene implements Scene {
     this.modeInfoText.anchor.set(0.5, 0);
     this.modeInfoText.position.set(rightX, 430);
     this.refreshModeInfo();
+    this.modeInfoText.visible = !this.currentRunSave;
 
-    const buttonStartY = 526;
-    const buttonGap = 56;
+    const buttonStartY = this.currentRunSave ? 540 : 526;
+    const buttonGap = this.currentRunSave ? 52 : 56;
     const buttons = new Container();
     buttons.position.set(rightX, buttonStartY);
     buttons.addChild(
-      this.createButton(MENU_COPY.startRun, 0, 0 * buttonGap, 0xff5577, () => this.sceneManager.changeScene(new GameScene(this.app, {
-        mode: this.selectedMode,
-        map: this.selectedMap,
-        runConfig: this.createSelectedRunConfig(),
-        onMainMenu: () => this.sceneManager.changeScene(new MainMenuScene(this.app, this.sceneManager))
-      }))),
+      this.createButton(MENU_COPY.startRun, 0, 0 * buttonGap, 0xff5577, () => this.startNewRun()),
       this.createButton(MENU_COPY.howToPlay, 0, 1 * buttonGap, 0x6cf0ff, () => {
         this.sceneManager.changeScene(new HowToPlayScene(this.app, this.sceneManager));
       }),
@@ -187,6 +186,8 @@ export class MainMenuScene implements Scene {
       }),
       this.createButton(MENU_COPY.resetSave, 0, 4 * buttonGap, 0xff3355, () => this.showResetConfirm())
     );
+
+    const resumeUi = this.currentRunSave ? this.createResumeUi(rightX, 424) : null;
 
     const version = makeLabel(`v${APP_VERSION}`, {
       fontSize: 11,
@@ -205,6 +206,62 @@ export class MainMenuScene implements Scene {
     signal.position.set(26, CANVAS.height - 24);
 
     this.uiLayer.addChild(title, subtitle, this.bestWaveText, mapLabel, mapSelector, modeLabel, modeSelector, this.modeInfoText, buttons, signal, version);
+    if (resumeUi) this.uiLayer.addChild(resumeUi);
+  }
+
+  private startNewRun(): void {
+    if (this.currentRunSave && !this.pendingNewRunConfirm) {
+      this.pendingNewRunConfirm = true;
+      if (this.modeInfoText) {
+        this.modeInfoText.visible = true;
+        this.modeInfoText.text = 'Saved run exists.\nTap START RUN again to overwrite it.';
+      }
+      return;
+    }
+    saveManager.clearCurrentRun();
+    this.sceneManager.changeScene(new GameScene(this.app, {
+      mode: this.selectedMode,
+      map: this.selectedMap,
+      runConfig: this.createSelectedRunConfig(),
+      onMainMenu: () => this.sceneManager.changeScene(new MainMenuScene(this.app, this.sceneManager))
+    }));
+  }
+
+  private resumeRun(): void {
+    const save = saveManager.loadCurrentRun();
+    if (!save) {
+      this.currentRunSave = null;
+      this.refreshModeInfo();
+      return;
+    }
+    const map = MAP_LIST.find((candidate) => candidate.id === save.runConfig.mapId) ?? DEFAULT_MAP;
+    this.sceneManager.changeScene(new GameScene(this.app, {
+      mode: save.runConfig.mode,
+      map,
+      runConfig: save.runConfig,
+      resumeSave: save,
+      onMainMenu: () => this.sceneManager.changeScene(new MainMenuScene(this.app, this.sceneManager))
+    }));
+  }
+
+  private createResumeUi(x: number, y: number): Container {
+    const box = new Container();
+    const save = this.currentRunSave!;
+    const map = MAP_LIST.find((candidate) => candidate.id === save.runConfig.mapId);
+    const savedAt = new Date(save.savedAt);
+    const info = makeText(`Saved: ${map?.name ?? save.runConfig.mapId} / ${CHALLENGE_MODE_LABEL[save.runConfig.mode]}\nWave ${save.gameState.wave}  Score ${save.gameState.score}  ${Number.isNaN(savedAt.getTime()) ? '' : savedAt.toLocaleTimeString()}`, {
+      fontSize: 10,
+      fill: COLORS.textDim,
+      align: 'center',
+      wordWrap: true,
+      wordWrapWidth: 360,
+      lineHeight: 14
+    });
+    info.anchor.set(0.5, 0);
+    info.position.set(x, y);
+    const resume = this.createButton('RESUME RUN', x, y + 50, 0x77ffaa, () => this.resumeRun());
+    box.addChild(info, resume);
+    return box;
   }
 
   private drawStaticBackground(): void {

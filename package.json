@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "deploy:server": "powershell -ExecutionPolicy Bypass -File tools/deploy-server.ps1",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },

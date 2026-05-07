@@ -152,6 +152,30 @@ export class RunStats {
     };
   }
 
+  static fromJson(json: Partial<RunStatsJson> | null | undefined): RunStats {
+    const stats = new RunStats();
+    if (!json || typeof json !== 'object') return stats;
+    stats.score = numberOrDefault(json.score, 0);
+    stats.killsTotal = numberOrDefault(json.killsTotal, 0);
+    stats.towersSold = numberOrDefault(json.towersSold, 0);
+    stats.upgradesPurchased = numberOrDefault(json.upgradesPurchased, 0);
+    stats.memoryEarned = numberOrDefault(json.memoryEarned, 0);
+    stats.coreDamageTaken = numberOrDefault(json.coreDamageTaken, 0);
+    stats.bossKills = numberOrDefault(json.bossKills, 0);
+    stats.maxResonanceTime = numberOrDefault(json.maxResonanceTime, 0);
+    stats.highestUpgradeLevel = numberOrDefault(json.highestUpgradeLevel, 0);
+    stats.maxActiveSynergies = numberOrDefault(json.maxActiveSynergies, 0);
+
+    for (const kind of ENEMY_KINDS) {
+      stats.killsByEnemyKind[kind] = numberOrDefault(json.killsByEnemyKind?.[kind], 0);
+    }
+    for (const type of EMOTION_TYPES) {
+      stats.damageDealtByEmotion[type] = numberOrDefault(json.damageDealtByEmotion?.[type], 0);
+      stats.towersBuiltByEmotion[type] = numberOrDefault(json.towersBuiltByEmotion?.[type], 0);
+    }
+    return stats;
+  }
+
   private addScore(amount: number): void {
     this.score += Math.max(0, Math.floor(amount));
   }
@@ -163,4 +187,8 @@ export class RunStats {
   private createEnemyRecord(): Record<EnemyKind, number> {
     return Object.fromEntries(ENEMY_KINDS.map((kind) => [kind, 0])) as Record<EnemyKind, number>;
   }
+}
+
+function numberOrDefault(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 }

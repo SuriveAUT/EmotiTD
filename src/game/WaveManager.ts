@@ -224,4 +224,11 @@ export class WaveManager {
     this.elapsed = 0;
     this.queue = [];
   }
+
+  restoreBetweenWaves(currentWave: number): void {
+    this.current = Math.max(0, Math.floor(currentWave));
+    this.active = false;
+    this.elapsed = 0;
+    this.queue = [];
+  }
 }

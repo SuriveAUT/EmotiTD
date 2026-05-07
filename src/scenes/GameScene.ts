@@ -1,6 +1,6 @@
 import { Application } from 'pixi.js';
 import type { Scene } from '../core/Scene';
-import { saveManager, type SaveManager } from '../core/SaveManager';
+import { saveManager, type CurrentRunSave, type SaveManager } from '../core/SaveManager';
 import { DEFAULT_MAP, type MapDefinition } from '../game/config';
 import { Game } from '../game/Game';
 import type { GameMode } from '../game/GameMode';
@@ -12,6 +12,7 @@ interface GameSceneOptions {
   runConfig?: RunConfig;
   onMainMenu?: () => void;
   saves?: SaveManager;
+  resumeSave?: CurrentRunSave;
 }
 
 export class GameScene implements Scene {
@@ -21,6 +22,7 @@ export class GameScene implements Scene {
   private readonly runConfig: RunConfig;
   private readonly onMainMenu?: () => void;
   private readonly saves: SaveManager;
+  private readonly resumeSave?: CurrentRunSave;
   private game: Game | null = null;
 
   constructor(app: Application, options: GameSceneOptions = {}) {
@@ -30,6 +32,7 @@ export class GameScene implements Scene {
     this.runConfig = options.runConfig ?? createDefaultRunConfig(this.map.id);
     this.onMainMenu = options.onMainMenu;
     this.saves = options.saves ?? saveManager;
+    this.resumeSave = options.resumeSave;
   }
 
   init(): void {
@@ -37,6 +40,7 @@ export class GameScene implements Scene {
       mode: this.mode,
       map: this.map,
       runConfig: this.runConfig,
+      resumeSave: this.resumeSave,
       onMainMenu: this.onMainMenu
     });
   }

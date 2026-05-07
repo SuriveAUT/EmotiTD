@@ -15,7 +15,7 @@ import { HUD } from '../ui/HUD';
 import { TowerBar } from '../ui/TowerBar';
 import { SidePanel } from '../ui/SidePanel';
 import { makeHeadline, makeLabel, makeText } from '../ui/text';
-import { saveManager, type SaveManager } from '../core/SaveManager';
+import { saveManager, type CurrentRunSave, type SaveManager } from '../core/SaveManager';
 import { APP_VERSION } from '../core/version';
 import { TutorialManager } from './TutorialManager';
 import type { GameMode } from './GameMode';
@@ -46,6 +46,7 @@ interface GameOptions {
   mode?: GameMode;
   map?: MapDefinition;
   runConfig?: RunConfig;
+  resumeSave?: CurrentRunSave;
   onMainMenu?: () => void;
 }
 
@@ -152,6 +153,11 @@ export class Game {
   };
   private readonly handleKeyDown = (e: KeyboardEvent) => this.onKeyDown(e);
   private readonly handleContextMenu = (e: MouseEvent) => e.preventDefault();
+  private readonly handleVisibilityChange = () => {
+    if (document.hidden) this.saveCurrentRun();
+  };
+  private readonly handlePageHide = () => this.saveCurrentRun();
+  private readonly handleBeforeUnload = () => this.saveCurrentRun();
 
   private ghost = new Container();
   private ghostBody = new Graphics();
@@ -167,6 +173,9 @@ export class Game {
   private victoryOverlay: Container | null = null;
   private pauseOverlay: Container | null = null;
   private devTools: DevToolsOverlay | null = null;
+  private autoSaveTimer = 0;
+  private restoredFromWaveStart = false;
+  private readonly resumeSave?: CurrentRunSave;
 
   constructor(app: Application, saves: SaveManager = saveManager, options: GameOptions = {}) {
     this.app = app;
@@ -174,6 +183,7 @@ export class Game {
     this.mode = options.mode ?? 'standard';
     this.mapDefinition = options.map ?? DEFAULT_MAP;
     this.runConfig = options.runConfig ?? createDefaultRunConfig(this.mapDefinition.id);
+    this.resumeSave = options.resumeSave;
     this.onMainMenu = options.onMainMenu;
     this.mode = this.runConfig.mode;
     this.waves.setRunConfig(this.runConfig);
@@ -269,6 +279,9 @@ export class Game {
     this.attachInput();
     this.app.stage.addChild(this.root);
 
+    if (this.resumeSave) {
+      this.restoreCurrentRun(this.resumeSave);
+    }
     this.refreshSidePanel();
     this.refreshUi();
     this.app.ticker.add(this.tick);
@@ -312,6 +325,9 @@ export class Game {
 
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('contextmenu', this.handleContextMenu);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    window.addEventListener('pagehide', this.handlePageHide);
+    window.addEventListener('beforeunload', this.handleBeforeUnload);
   }
 
   private detachInput() {
@@ -320,6 +336,9 @@ export class Game {
     this.app.stage.off('rightdown', this.handleRightDown);
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('contextmenu', this.handleContextMenu);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    window.removeEventListener('pagehide', this.handlePageHide);
+    window.removeEventListener('beforeunload', this.handleBeforeUnload);
   }
 
   private onPointerMove(e: FederatedPointerEvent) {
@@ -331,9 +350,19 @@ export class Game {
   private onPointerDown(e: FederatedPointerEvent) {
     if (this.state.defeat || this.state.victory) return;
     const p = e.global;
+    this.pointer.x = p.x;
+    this.pointer.y = p.y;
+    this.updateHoverCell();
+
     const inField = p.x >= FIELD.x && p.x < FIELD.x + FIELD.width &&
                     p.y >= FIELD.y && p.y < FIELD.y + FIELD.height;
-    if (!inField) return;
+    if (!inField) {
+      if (!this.isUiPoint(p.x, p.y)) {
+        this.cancelPlacement();
+        this.deselectTower();
+      }
+      return;
+    }
 
     if (this.selectedTowerType) {
       this.tryPlace(p.x, p.y);
@@ -347,6 +376,10 @@ export class Game {
     } else {
       this.deselectTower();
     }
+  }
+
+  private isUiPoint(x: number, y: number): boolean {
+    return y >= CANVAS.height - CANVAS.towerBarHeight || x >= CANVAS.width - CANVAS.rightPanelWidth || y < CANVAS.hudHeight;
   }
 
   private onKeyDown(e: KeyboardEvent) {
@@ -443,14 +476,19 @@ export class Game {
     }
   }
 
-  private tryPlace(_wx: number, _wy: number) {
-    if (!this.selectedTowerType || !this.hoveredCell) return;
+  private tryPlace(wx: number, wy: number) {
+    if (!this.selectedTowerType) return;
+    const targetCell = this.hoveredCell ?? this.map.worldToCell(wx, wy);
+    if (!targetCell) {
+      this.fizzle();
+      return;
+    }
     if (this.runConfig.allowedTowers && !this.runConfig.allowedTowers.includes(this.selectedTowerType)) {
       this.showStatusNotice('Emotion locked by challenge rules', 1.2);
       this.cancelPlacement();
       return;
     }
-    const { cx, cy } = this.hoveredCell;
+    const { cx, cy } = targetCell;
     if (!this.map.isPlaceable(cx, cy)) {
       this.showStatusNotice('Invalid build space');
       this.fizzle();
@@ -464,12 +502,7 @@ export class Game {
     }
     const center = this.map.cellCenter(cx, cy);
     const tower = new Tower(this.selectedTowerType, cx, cy, center.x, center.y);
-    tower.container.on('pointerdown', (e: FederatedPointerEvent) => {
-      e.stopPropagation();
-      this.selectTower(tower);
-    });
-    tower.container.on('pointerover', () => { tower.hovered = true; });
-    tower.container.on('pointerout',  () => { tower.hovered = false; });
+    this.wireTowerInput(tower);
     this.towers.push(tower);
     this.runStats.recordTowerBuilt(tower.type);
     this.towersLayer.addChild(tower.container);
@@ -491,6 +524,17 @@ export class Game {
 
     this.towerBar.setAffordability(this.state.memory);
     if (this.state.memory < cost) this.cancelPlacement();
+    this.saveCurrentRun();
+  }
+
+  private wireTowerInput(tower: Tower): void {
+    tower.container.removeAllListeners();
+    tower.container.on('pointerdown', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.selectTower(tower);
+    });
+    tower.container.on('pointerover', () => { tower.hovered = true; });
+    tower.container.on('pointerout',  () => { tower.hovered = false; });
   }
 
   private fizzle() {
@@ -551,6 +595,7 @@ export class Game {
       sizeMin: 1.2, sizeMax: 3, lifeMin: 0.28, lifeMax: 0.62, drag: 3, shape: 'spark'
     });
     this.refreshSidePanel();
+    this.saveCurrentRun();
   }
 
   private setSelectedTargetingMode(mode: TargetingMode) {
@@ -558,6 +603,7 @@ export class Game {
     this.selectedTower.setTargetingMode(mode);
     audioManager.playSfx('ui-click');
     this.refreshSidePanel();
+    this.saveCurrentRun();
   }
 
   private sellSelectedTower() {
@@ -577,6 +623,7 @@ export class Game {
     audioManager.playSfx('tower-sell');
     this.refreshSidePanel();
     this.refreshUi();
+    this.saveCurrentRun();
   }
 
   private findTowerAt(wx: number, wy: number): Tower | null {
@@ -595,6 +642,7 @@ export class Game {
   private tick = (ticker: Ticker) => {
     const rawDt = Math.min(0.05, ticker.deltaMS / 1000);
     this.updateStatusNotice(rawDt);
+    this.updateAutoSave(rawDt);
     if (this.state.paused || this.state.defeat) {
       this.refreshUi();
       this.devTools?.update(rawDt);
@@ -1239,6 +1287,7 @@ export class Game {
     this.state.autoStartIn = AUTO_START_SECONDS;
     if (boss) this.showStatusNotice('BOSS WAVE INCOMING', 2.5);
     this.refreshSidePanel();
+    this.saveCurrentRun();
   }
 
   private completeWave() {
@@ -1272,6 +1321,7 @@ export class Game {
       return;
     }
     this.refreshSidePanel();
+    this.saveCurrentRun();
   }
 
   private applyBalanceModifiers() {
@@ -1434,6 +1484,7 @@ export class Game {
   private lose() {
     if (this.state.defeat) return;
     this.state.defeat = true;
+    this.saves.clearCurrentRun();
     this.saves.recordChallengeRun(this.runConfig.mode, this.runConfig.mapId, this.waves.current, this.calculateScore(), this.runConfig.seed);
     audioManager.playSfx('game-over');
     audioManager.playMusic('game-over');
@@ -1450,6 +1501,7 @@ export class Game {
   private win() {
     if (this.state.victory) return;
     this.state.victory = true;
+    this.saves.clearCurrentRun();
     this.state.paused = false;
     this.state.autoStartIn = 0;
     this.runStats.recordVictory(this.state.stability);
@@ -1487,6 +1539,7 @@ export class Game {
     if (this.state.paused) this.showPauseOverlay();
     else this.hidePauseOverlay();
     this.refreshUi();
+    this.saveCurrentRun();
   }
 
   private toggleSpeed() {
@@ -1502,6 +1555,7 @@ export class Game {
   }
 
   private restart(mode: GameMode = this.mode) {
+    this.saves.clearCurrentRun();
     for (const t of this.towers) {
       this.map.release(t.cx, t.cy);
       t.destroy();
@@ -1596,6 +1650,7 @@ export class Game {
     this.showStatusNotice('Endless mode unlocked - Wave 31 awaits', 2.2);
     this.refreshSidePanel();
     this.refreshUi();
+    this.saveCurrentRun();
   }
 
   private showVictoryOverlay() {
@@ -1687,13 +1742,14 @@ export class Game {
     title.anchor.set(0.5);
     title.position.set(0, -72);
 
-    const resume = this.createOverlayButton('RESUME', 0, -16, 0x77ffaa, () => this.resumeFromOverlay());
-    const restart = this.createOverlayButton('RESTART', -95, 48, COLORS.warn, () => this.restart(this.mode));
-    const menu = this.createOverlayButton('MAIN MENU', 95, 48, COLORS.pathCore, () => this.onMainMenu?.());
+    const resume = this.createOverlayButton('RESUME', 0, -24, 0x77ffaa, () => this.resumeFromOverlay());
+    const restart = this.createOverlayButton('RESTART', -95, 38, COLORS.warn, () => this.restart(this.mode));
+    const menu = this.createOverlayButton('MAIN MENU', 95, 38, COLORS.pathCore, () => this.saveAndQuit());
+    const saveQuit = this.createOverlayButton('SAVE & QUIT', 0, 96, COLORS.pathCore, () => this.saveAndQuit());
 
     const content = new Container();
     content.position.set(CANVAS.width / 2, CANVAS.height / 2);
-    content.addChild(panel, title, resume, restart, menu);
+    content.addChild(panel, title, resume, restart, menu, saveQuit);
     overlay.addChild(veil, content);
     this.pauseOverlay = overlay;
     this.uiLayer.addChild(overlay);
@@ -1710,6 +1766,12 @@ export class Game {
     this.state.paused = false;
     this.hidePauseOverlay();
     this.refreshUi();
+    this.saveCurrentRun();
+  }
+
+  private saveAndQuit(): void {
+    this.saveCurrentRun();
+    this.onMainMenu?.();
   }
 
   private createOverlayButton(label: string, x: number, y: number, color: number, onClick: () => void): Container {
@@ -1789,6 +1851,96 @@ export class Game {
 
   private calculateScore(): number {
     return this.runStats.score;
+  }
+
+  private updateAutoSave(dt: number): void {
+    if (this.state.defeat || this.state.victory) return;
+    this.autoSaveTimer += dt;
+    if (this.autoSaveTimer < 12) return;
+    this.autoSaveTimer = 0;
+    this.saveCurrentRun();
+  }
+
+  private saveCurrentRun(): void {
+    if (this.state.defeat || this.state.victory) return;
+    if (this.towers.length === 0 && this.waves.current === 0 && this.state.memory === this.modifiedStartingMemory()) return;
+    this.saves.saveCurrentRun({
+      runConfig: this.runConfig,
+      gameState: {
+        memory: this.state.memory,
+        stability: this.state.stability,
+        wave: this.waves.current,
+        score: this.calculateScore(),
+        waveInProgress: !this.state.betweenWaves,
+        restoredFromWaveStart: this.restoredFromWaveStart
+      },
+      towers: this.towers.map((tower) => {
+        const upgrade = tower.getUpgradeState();
+        return {
+          id: `${tower.type}:${tower.cx}:${tower.cy}`,
+          emotion: tower.type,
+          x: tower.x,
+          y: tower.y,
+          gridX: tower.cx,
+          gridY: tower.cy,
+          selectedPath: upgrade.path,
+          pathLevel: upgrade.level,
+          targetingMode: tower.getTargetingMode(),
+          totalSpent: upgrade.spent
+        };
+      }),
+      runStats: this.runStats.toJson()
+    });
+  }
+
+  private restoreCurrentRun(save: CurrentRunSave): void {
+    this.clearActiveEnemiesAndProjectiles();
+    this.towers = [];
+    this.towersLayer.removeChildren();
+    this.balance = new EmotionalBalance();
+    this.balance.setChallengeModifiers(this.runConfig.synergyPowerModifier ?? 1, this.runConfig.singleEmotionPenaltyModifier ?? 1);
+    this.synergies = new SynergySystem();
+    this.synergies.setPowerModifier(this.runConfig.synergyPowerModifier ?? 1);
+    this.runStats = RunStats.fromJson(save.runStats);
+
+    this.state.memory = Math.max(0, Math.floor(save.gameState.memory));
+    this.state.stability = Math.max(1, Math.floor(save.gameState.stability));
+    this.state.paused = false;
+    this.state.defeat = false;
+    this.state.victory = false;
+    this.state.betweenWaves = true;
+    this.state.autoStartIn = AUTO_START_SECONDS;
+    this.restoredFromWaveStart = !!save.gameState.waveInProgress;
+    const restoredWave = save.gameState.waveInProgress
+      ? Math.max(0, Math.floor(save.gameState.wave) - 1)
+      : Math.max(0, Math.floor(save.gameState.wave));
+    this.waves.restoreBetweenWaves(restoredWave);
+
+    for (const item of save.towers) {
+      if (!TOWER_STATS[item.emotion]) continue;
+      if (!this.map.isPlaceable(item.gridX, item.gridY)) continue;
+      const center = this.map.cellCenter(item.gridX, item.gridY);
+      const tower = new Tower(item.emotion, item.gridX, item.gridY, center.x, center.y);
+      if (item.selectedPath) {
+        for (let level = 0; level < Math.max(0, Math.floor(item.pathLevel)); level++) {
+          if (!tower.upgrade(item.selectedPath)) break;
+        }
+      }
+      tower.setTargetingMode(item.targetingMode);
+      this.wireTowerInput(tower);
+      this.towers.push(tower);
+      this.towersLayer.addChild(tower.container);
+      this.map.occupy(item.gridX, item.gridY);
+      this.balance.add(item.emotion);
+    }
+
+    this.selectedTower = null;
+    this.selectedTowerType = null;
+    this.towerBar.setSelected(null);
+    this.map.redrawCore(this.state.stability / this.modifiedStartingStability());
+    this.refreshSynergies();
+    this.applyBalanceModifiers();
+    this.showStatusNotice(this.restoredFromWaveStart ? 'Run restored from start of current wave' : 'Run restored', 2.2);
   }
 
   private modifiedStartingMemory(): number {

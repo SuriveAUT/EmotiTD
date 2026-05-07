@@ -1,5 +1,6 @@
 import { Application, Container, Graphics, Text } from 'pixi.js';
 import { audioManager } from '../core/AudioManager';
+import { applyRenderResolution, getRenderResolution } from '../core/renderQuality';
 import type { Scene } from '../core/Scene';
 import type { SceneManager } from '../core/SceneManager';
 import { saveManager, type QualitySetting, type SaveData, type SaveManager } from '../core/SaveManager';
@@ -58,6 +59,7 @@ export class SettingsScene implements Scene {
 
     const quality = this.createSettingButton(SETTINGS_COPY.quality, 445, () => {
       this.data = this.saves.updateSettings({ quality: this.nextQuality(this.data.settings.quality) });
+      applyRenderResolution(this.app, this.data.settings.quality);
       audioManager.applySettings(this.data.settings);
       this.refreshValues();
     });
@@ -147,7 +149,7 @@ export class SettingsScene implements Scene {
     this.bestValue.text = SETTINGS_COPY.best(this.data.bestWave, this.data.bestScore);
     this.mutedValue.text = this.data.settings.muted ? 'ON' : 'OFF';
     this.screenShakeValue.text = this.data.settings.screenShake ? 'ON' : 'OFF';
-    this.qualityValue.text = this.data.settings.quality.toUpperCase();
+    this.qualityValue.text = `${this.data.settings.quality.toUpperCase()} ${getRenderResolution(this.data.settings.quality).toFixed(1)}x`;
   }
 
   private nextQuality(current: QualitySetting): QualitySetting {

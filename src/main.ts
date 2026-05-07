@@ -1,5 +1,6 @@
 import { Application } from 'pixi.js';
 import { audioManager } from './core/AudioManager';
+import { getRenderResolution } from './core/renderQuality';
 import { SceneManager } from './core/SceneManager';
 import { saveManager } from './core/SaveManager';
 import { CANVAS } from './game/config';
@@ -7,14 +8,13 @@ import { MainMenuScene } from './scenes/MainMenuScene';
 
 async function main() {
   const initialSave = saveManager.load();
-  const maxResolution = initialSave.settings.quality === 'low' ? 1 : initialSave.settings.quality === 'medium' ? 1.5 : 2;
   const app = new Application();
   await app.init({
     width: CANVAS.width,
     height: CANVAS.height,
     background: 0x05070d,
     antialias: true,
-    resolution: Math.min(maxResolution, window.devicePixelRatio || 1),
+    resolution: getRenderResolution(initialSave.settings.quality),
     autoDensity: true,
     powerPreference: 'high-performance'
   });
