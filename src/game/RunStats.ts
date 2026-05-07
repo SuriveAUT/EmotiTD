@@ -1,4 +1,4 @@
-import { EMOTION_TYPES, EmotionType, EnemyKind } from './types';
+import { BOSS_KINDS, EMOTION_TYPES, EmotionType, EnemyKind, isBossKind } from './types';
 
 export interface RunSummary {
   score: number;
@@ -13,6 +13,12 @@ export interface RunSummary {
   topDamage: number;
 }
 
+export interface RunStatsJson extends RunSummary {
+  killsByEnemyKind: Record<EnemyKind, number>;
+  damageDealtByEmotion: Record<EmotionType, number>;
+  towersBuiltByEmotion: Record<EmotionType, number>;
+}
+
 const ENEMY_KINDS: EnemyKind[] = [
   EnemyKind.Doubtling,
   EnemyKind.PanicRunner,
@@ -23,7 +29,7 @@ const ENEMY_KINDS: EnemyKind[] = [
   EnemyKind.VoidWraith,
   EnemyKind.Overthinker,
   EnemyKind.NumbOne,
-  EnemyKind.Spiral
+  ...BOSS_KINDS
 ];
 
 export class RunStats {
@@ -45,7 +51,7 @@ export class RunStats {
     this.killsByEnemyKind[kind]++;
     const killScore = bounty * 12 + Math.max(0, wave) * 4;
     this.addScore(killScore);
-    if (kind === EnemyKind.Spiral) {
+    if (isBossKind(kind)) {
       this.bossKills++;
       this.addScore(5000 + Math.max(0, wave) * 120);
     }
@@ -118,6 +124,15 @@ export class RunStats {
       maxResonanceTime: this.maxResonanceTime,
       topDamageEmotion,
       topDamage
+    };
+  }
+
+  toJson(): RunStatsJson {
+    return {
+      ...this.summary(),
+      killsByEnemyKind: { ...this.killsByEnemyKind },
+      damageDealtByEmotion: { ...this.damageDealtByEmotion },
+      towersBuiltByEmotion: { ...this.towersBuiltByEmotion }
     };
   }
 

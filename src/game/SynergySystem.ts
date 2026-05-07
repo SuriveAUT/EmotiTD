@@ -1,4 +1,4 @@
-import { SYNERGY_DEFS, type SynergyDef, type SynergyModifiers } from './config';
+import { HUD_COPY, SYNERGY_DEFS, type SynergyDef, type SynergyModifiers } from './config';
 import type { EmotionType } from './types';
 
 export class SynergySystem {
@@ -20,7 +20,7 @@ export class SynergySystem {
   }
 
   statusText(): string {
-    if (this.active.length === 0) return 'NO SYNERGY';
+    if (this.active.length === 0) return HUD_COPY.noSynergy;
     if (this.active.length === 1) return this.active[0].label;
     return `${this.active.length} SYNERGIES`;
   }
@@ -46,7 +46,18 @@ export class SynergySystem {
       chainRangeAdd: this.add(a.chainRangeAdd, b.chainRangeAdd),
       resonanceDamageMul: this.mul(a.resonanceDamageMul, b.resonanceDamageMul),
       stunDurationAdd: this.add(a.stunDurationAdd, b.stunDurationAdd),
-      fastEnemyDamageMul: this.mul(a.fastEnemyDamageMul, b.fastEnemyDamageMul)
+      fastEnemyDamageMul: this.mul(a.fastEnemyDamageMul, b.fastEnemyDamageMul),
+      poisonDpsMul: this.mul(a.poisonDpsMul, b.poisonDpsMul),
+      armorShredAdd: this.add(a.armorShredAdd, b.armorShredAdd),
+      guiltMarkAdd: this.add(a.guiltMarkAdd, b.guiltMarkAdd),
+      guiltExecuteThresholdAdd: this.add(a.guiltExecuteThresholdAdd, b.guiltExecuteThresholdAdd),
+      coreShieldMul: this.mul(a.coreShieldMul, b.coreShieldMul),
+      trustAnchorDurationAdd: this.add(a.trustAnchorDurationAdd, b.trustAnchorDurationAdd),
+      shameGroupDamageMul: this.mul(a.shameGroupDamageMul, b.shameGroupDamageMul),
+      shameGroupRadiusAdd: this.add(a.shameGroupRadiusAdd, b.shameGroupRadiusAdd),
+      loveDamageMul: this.mul(a.loveDamageMul, b.loveDamageMul),
+      loveFireRateMul: this.mul(a.loveFireRateMul, b.loveFireRateMul),
+      prideIsolationDamageMul: this.mul(a.prideIsolationDamageMul, b.prideIsolationDamageMul)
     };
   }
 

@@ -1,7 +1,7 @@
 import { COLORS } from './layout';
 import type { Vec2 } from '../game/types';
 
-export type MapStyle = 'fractured' | 'silent';
+export type MapStyle = 'fractured' | 'silent' | 'panic';
 
 export interface MapDefinition {
   id: string;
@@ -75,12 +75,44 @@ export const SILENT_LAKE_MAP: MapDefinition = {
   corePosition: { x: 950, y: 360 }
 };
 
-export const MAP_DEFINITIONS: Record<string, MapDefinition> = {
-  [FRACTURED_MIND_MAP.id]: FRACTURED_MIND_MAP,
-  [SILENT_LAKE_MAP.id]: SILENT_LAKE_MAP
+export const PANIC_CIRCUIT_MAP: MapDefinition = {
+  id: 'panic-circuit',
+  name: 'Panic Circuit',
+  theme: 'glitch-fear',
+  style: 'panic',
+  waypoints: [
+    { x: -40, y: 360 },
+    { x: 140, y: 360 },
+    { x: 140, y: 160 },
+    { x: 330, y: 160 },
+    { x: 330, y: 500 },
+    { x: 520, y: 500 },
+    { x: 520, y: 260 },
+    { x: 700, y: 260 },
+    { x: 700, y: 610 },
+    { x: 860, y: 610 },
+    { x: 860, y: 390 },
+    { x: 950, y: 390 }
+  ],
+  backgroundColors: {
+    field: 0x08040f,
+    grid: 0x231032,
+    gridStrong: 0x4a1b5f,
+    pathEdge: 0x351046,
+    pathCore: 0xff77ff,
+    pathFlow: 0x77ffaa
+  },
+  ambient: 0xff77ff,
+  corePosition: { x: 950, y: 390 }
 };
 
-export const MAP_LIST: MapDefinition[] = [FRACTURED_MIND_MAP, SILENT_LAKE_MAP];
+export const MAP_DEFINITIONS: Record<string, MapDefinition> = {
+  [FRACTURED_MIND_MAP.id]: FRACTURED_MIND_MAP,
+  [SILENT_LAKE_MAP.id]: SILENT_LAKE_MAP,
+  [PANIC_CIRCUIT_MAP.id]: PANIC_CIRCUIT_MAP
+};
+
+export const MAP_LIST: MapDefinition[] = [FRACTURED_MIND_MAP, SILENT_LAKE_MAP, PANIC_CIRCUIT_MAP];
 
 export const DEFAULT_MAP_ID = FRACTURED_MIND_MAP.id;
 export const DEFAULT_MAP = FRACTURED_MIND_MAP;

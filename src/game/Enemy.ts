@@ -1,7 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { ENEMY_STATS } from './config';
 import type { DamagePacket } from './types';
-import { EmotionType, EnemyKind } from './types';
+import { EmotionType, EnemyKind, isBossKind } from './types';
 import type { ParticleSystem } from './Particles';
 import type { PathSampler } from './math';
 import { TAU, rand } from './math';
@@ -99,6 +99,8 @@ export class Enemy {
       case EnemyKind.Overthinker: this.drawOverthinker(g); break;
       case EnemyKind.NumbOne: this.drawNumb(g); break;
       case EnemyKind.Spiral: this.drawSpiral(g); break;
+      case EnemyKind.Mask: this.drawMask(g); break;
+      case EnemyKind.BurnoutBoss: this.drawBurnoutBoss(g); break;
     }
   }
 
@@ -114,15 +116,20 @@ export class Enemy {
   private drawPanic(g: Graphics) {
     const r = this.radius;
     // arrow-like triangle
+    g.poly([r * 1.45, 0, -r * 1.0, -r * 1.05, -r * 0.65, 0, -r * 1.0, r * 1.05])
+      .fill({ color: 0xff5577, alpha: 0.12 });
     g.poly([r * 1.1, 0, -r * 0.8, -r * 0.8, -r * 0.8, r * 0.8])
       .fill({ color: 0x441020, alpha: 1 })
       .stroke({ color: 0xff5577, width: 2, alpha: 1 });
     g.circle(-r * 0.2, 0, r * 0.3).fill({ color: 0xff5577, alpha: 0.9 });
+    g.moveTo(-r * 1.15, -r * 0.62).lineTo(-r * 1.65, -r * 0.62).stroke({ color: 0xffd166, width: 1.5, alpha: 0.8 });
+    g.moveTo(-r * 1.08, r * 0.55).lineTo(-r * 1.48, r * 0.55).stroke({ color: 0xffd166, width: 1.2, alpha: 0.65 });
   }
 
   private drawGuilt(g: Graphics) {
     const r = this.radius;
-    g.regularPoly(0, 0, r + 4, 8, 0).fill({ color: 0x0a0f1a, alpha: 0.6 });
+    g.regularPoly(0, 0, r + 7, 8, 0).fill({ color: 0x0a0f1a, alpha: 0.7 });
+    g.regularPoly(0, 0, r + 3, 8, Math.PI / 8).stroke({ color: 0xffd166, width: 2, alpha: 0.34 });
     g.regularPoly(0, 0, r, 8, 0).fill({ color: 0x1d2438, alpha: 1 });
     g.regularPoly(0, 0, r, 8, 0).stroke({ color: 0x6c7da0, width: 2, alpha: 0.9 });
     // chain marks
@@ -156,17 +163,47 @@ export class Enemy {
 
   private drawSpiral(g: Graphics) {
     const r = this.radius;
-    g.circle(0, 0, r + 16).fill({ color: 0xff5577, alpha: 0.05 });
-    g.circle(0, 0, r + 8).fill({ color: 0xff5577, alpha: 0.1 });
+    g.circle(0, 0, r + 28).fill({ color: 0xff5577, alpha: 0.06 });
+    g.circle(0, 0, r + 18).stroke({ color: 0xff5577, width: 2, alpha: 0.38 });
+    g.circle(0, 0, r + 9).fill({ color: 0xff5577, alpha: 0.12 });
     g.circle(0, 0, r).fill({ color: 0x110714, alpha: 1 });
     // rotating arms (will be spun via container)
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * TAU;
-      g.moveTo(0, 0).lineTo(Math.cos(a) * r, Math.sin(a) * r)
-        .stroke({ color: 0xff5577, width: 3, alpha: 0.85 });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU;
+      const inner = r * 0.18;
+      const outer = r + 13;
+      g.moveTo(Math.cos(a) * inner, Math.sin(a) * inner).lineTo(Math.cos(a + 0.42) * outer, Math.sin(a + 0.42) * outer)
+        .stroke({ color: 0xff5577, width: 4, alpha: 0.9 });
+      g.circle(Math.cos(a + 0.42) * outer, Math.sin(a + 0.42) * outer, 4).fill({ color: 0xffd166, alpha: 0.85 });
     }
-    g.circle(0, 0, r * 0.45).stroke({ color: 0x6cf0ff, width: 2, alpha: 0.9 });
-    g.circle(0, 0, r * 0.22).fill({ color: 0xffffff, alpha: 0.95 });
+    g.circle(0, 0, r * 0.58).stroke({ color: 0x6cf0ff, width: 2.5, alpha: 0.95 });
+    g.circle(0, 0, r * 0.32).fill({ color: 0xffffff, alpha: 0.95 });
+    g.circle(0, 0, r + 2).stroke({ color: 0xffffff, width: 1, alpha: 0.25 });
+  }
+
+  private drawMask(g: Graphics) {
+    const r = this.radius;
+    g.circle(0, 0, r + 24).fill({ color: 0xff77ff, alpha: 0.05 });
+    g.circle(0, 0, r + 14).stroke({ color: 0xff77ff, width: 2, alpha: 0.35 });
+    g.ellipse(0, 0, r * 0.9, r * 1.15).fill({ color: 0x17091f, alpha: 1 }).stroke({ color: 0xff77ff, width: 3, alpha: 0.9 });
+    g.circle(-r * 0.28, -r * 0.18, r * 0.14).fill({ color: 0x6cf0ff, alpha: 0.95 });
+    g.circle(r * 0.28, -r * 0.18, r * 0.14).fill({ color: 0xffd166, alpha: 0.95 });
+    g.moveTo(-r * 0.45, r * 0.35).lineTo(r * 0.45, r * 0.25).stroke({ color: 0xffffff, width: 2, alpha: 0.65 });
+    g.moveTo(0, -r * 0.95).lineTo(0, r * 0.95).stroke({ color: 0xb070ff, width: 1.5, alpha: 0.55 });
+  }
+
+  private drawBurnoutBoss(g: Graphics) {
+    const r = this.radius;
+    g.circle(0, 0, r + 26).fill({ color: 0xff5b3a, alpha: 0.07 });
+    g.regularPoly(0, 0, r + 14, 8, Math.PI / 8).stroke({ color: 0xff5b3a, width: 3, alpha: 0.45 });
+    g.regularPoly(0, 0, r + 2, 8, 0).fill({ color: 0x190906, alpha: 1 }).stroke({ color: 0xff5b3a, width: 3, alpha: 0.9 });
+    g.circle(0, 0, r * 0.58).stroke({ color: 0xffd166, width: 2.4, alpha: 0.8 });
+    for (let i = 0; i < 5; i++) {
+      const a = -1.2 + i * 0.6;
+      g.moveTo(Math.cos(a) * r * 0.22, Math.sin(a) * r * 0.22)
+        .lineTo(Math.cos(a) * r * 0.92, Math.sin(a) * r * 0.92)
+        .stroke({ color: 0xffd166, width: 2, alpha: 0.72 });
+    }
   }
 
   private drawEnvy(g: Graphics) {
@@ -175,12 +212,15 @@ export class Enemy {
     g.circle(0, 0, r).fill({ color: 0x07130b, alpha: 1 }).stroke({ color: 0x77ffaa, width: 2, alpha: 0.9 });
     g.circle(r * 0.3, -r * 0.15, r * 0.38).fill({ color: 0x77ffaa, alpha: 0.85 });
     g.moveTo(-r * 0.7, r * 0.55).lineTo(r * 0.8, -r * 0.55).stroke({ color: 0x2aff77, width: 1.5, alpha: 0.75 });
+    g.circle(-r * 0.68, -r * 0.55, 2.6).fill({ color: 0x77ffaa, alpha: 0.8 });
+    g.circle(r * 0.72, r * 0.5, 2.3).fill({ color: 0x77ffaa, alpha: 0.65 });
   }
 
   private drawBurnout(g: Graphics) {
     const r = this.radius;
-    g.regularPoly(0, 0, r + 4, 7, 0).fill({ color: 0x12080a, alpha: 1 });
-    g.regularPoly(0, 0, r, 7, 0).stroke({ color: 0xff5b3a, width: 2, alpha: 0.75 });
+    g.regularPoly(0, 0, r + 8, 7, 0).fill({ color: 0x12080a, alpha: 1 });
+    g.regularPoly(0, 0, r + 3, 7, 0).stroke({ color: 0xff5b3a, width: 3, alpha: 0.75 });
+    g.regularPoly(0, 0, r, 7, Math.PI / 7).fill({ color: 0x24100a, alpha: 0.75 });
     for (let i = 0; i < 4; i++) {
       const a = -0.9 + i * 0.55;
       g.moveTo(Math.cos(a) * r * 0.2, Math.sin(a) * r * 0.2)
@@ -193,6 +233,7 @@ export class Enemy {
   private drawVoid(g: Graphics) {
     const r = this.radius;
     g.circle(0, 0, r + 7).fill({ color: 0x000000, alpha: 0.42 });
+    g.circle(0, 0, r + 11).stroke({ color: 0xb070ff, width: 1, alpha: 0.28 });
     g.poly([0, -r, r * 0.75, -r * 0.15, r * 0.35, r, -r * 0.75, r * 0.35, -r * 0.45, -r * 0.65])
       .fill({ color: 0x05030b, alpha: 1 })
       .stroke({ color: 0xb070ff, width: 2, alpha: 0.95 });
@@ -203,6 +244,7 @@ export class Enemy {
   private drawOverthinker(g: Graphics) {
     const r = this.radius;
     g.circle(0, 0, r + 6).fill({ color: 0x081026, alpha: 0.65 });
+    g.circle(0, 0, r + 9).stroke({ color: 0x6cf0ff, width: 1, alpha: 0.25 });
     g.circle(0, 0, r).stroke({ color: 0x4ba8ff, width: 2, alpha: 0.85 });
     g.circle(0, 0, r * 0.62).fill({ color: 0x090b1a, alpha: 1 }).stroke({ color: 0xb070ff, width: 1.5, alpha: 0.8 });
     for (let i = 0; i < 3; i++) {
@@ -217,6 +259,7 @@ export class Enemy {
     g.circle(0, 0, r + 5).fill({ color: 0x090a0d, alpha: 0.6 });
     g.regularPoly(0, 0, r, 9, 0).fill({ color: 0x171a22, alpha: 1 });
     g.regularPoly(0, 0, r, 9, 0).stroke({ color: 0x8c95a8, width: 1.6, alpha: 0.6 });
+    g.rect(-r * 0.72, -r * 0.72, r * 1.44, r * 1.44).stroke({ color: 0x596274, width: 1, alpha: 0.24 });
     g.circle(0, 0, r * 0.52).fill({ color: 0x262b35, alpha: 0.75 });
     g.moveTo(-r * 0.55, -r * 0.18).lineTo(r * 0.55, -r * 0.18).stroke({ color: 0x596274, width: 1.4, alpha: 0.8 });
     g.moveTo(-r * 0.35, r * 0.25).lineTo(r * 0.35, r * 0.25).stroke({ color: 0x596274, width: 1.2, alpha: 0.55 });
@@ -225,14 +268,20 @@ export class Enemy {
   private drawHpBar() {
     const g = this.hpBar;
     g.clear();
-    if (this.hp >= this.maxHp) return; // hide when full
-    const w = this.radius * 2 + 6;
-    const h = 3;
+    if (this.hp >= this.maxHp && !isBossKind(this.kind)) return; // hide when full except bosses
+    const boss = isBossKind(this.kind);
+    const w = this.radius * (boss ? 2.8 : 2) + 6;
+    const h = boss ? 5 : 3;
     const y = -this.radius - 9;
     const ratio = Math.max(0, this.hp / this.maxHp);
     g.rect(-w / 2, y, w, h).fill({ color: 0x0a0f1a, alpha: 0.85 });
-    g.rect(-w / 2, y, w * ratio, h).fill({ color: ratio > 0.5 ? 0x77ffaa : ratio > 0.25 ? 0xffd166 : 0xff5577, alpha: 1 });
+    g.rect(-w / 2, y, w * ratio, h).fill({ color: boss ? 0xff5577 : ratio > 0.5 ? 0x77ffaa : ratio > 0.25 ? 0xffd166 : 0xff5577, alpha: 1 });
     g.rect(-w / 2, y, w, h).stroke({ color: 0x1a2238, width: 1, alpha: 1 });
+    if (boss) {
+      g.rect(-w / 2, y - 4, w, 1).fill({ color: 0xffd166, alpha: 0.9 });
+      g.circle(-w / 2 - 5, y + h / 2, 3).fill({ color: 0xff5577, alpha: 0.9 });
+      g.circle(w / 2 + 5, y + h / 2, 3).fill({ color: 0xff5577, alpha: 0.9 });
+    }
   }
 
   takeDamage(packet: DamagePacket): { killed: boolean } {
@@ -339,7 +388,7 @@ export class Enemy {
 
   /** boss spawns child enemies — Game polls and clears */
   consumeSpawn(dt: number): boolean {
-    if (this.kind !== EnemyKind.Spiral || !this.alive) return false;
+    if (!isBossKind(this.kind) || !this.alive) return false;
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
       this.spawnTimer = 6;
@@ -479,16 +528,23 @@ export class Enemy {
     // body rotation
     if (this.kind === EnemyKind.PanicRunner) {
       this.body.rotation = this.angle;
-    } else if (this.kind === EnemyKind.Spiral) {
+      this.body.scale.set(this.panicBoostTimer > 0 ? 1.18 : 1);
+    } else if (isBossKind(this.kind)) {
       this.body.rotation += dt * 1.4;
+      const bossPulse = 1 + Math.sin(t * 3.6) * 0.055;
+      this.body.scale.set(bossPulse);
     } else if (this.kind === EnemyKind.VoidWraith) {
       this.body.rotation += dt * 2.4;
+      this.body.scale.set(0.96 + Math.sin(t * 4.2) * 0.06);
     } else if (this.kind === EnemyKind.Overthinker) {
       this.body.rotation += this.thinkChannelTimer > 0 ? dt * 3.8 : dt * 0.45;
+      this.body.scale.set(this.thinkChannelTimer > 0 ? 1.08 + Math.sin(t * 10) * 0.04 : 1);
     } else if (this.kind === EnemyKind.ShameSwarm) {
       this.body.rotation += dt * 1.8;
+      this.body.scale.set(0.96 + Math.sin(t * 6) * 0.05);
     } else {
       this.body.rotation = Math.sin(t * 3) * 0.15;
+      this.body.scale.set(1);
     }
 
     // damage flash
@@ -512,11 +568,11 @@ export class Enemy {
                         this.panicBoostTimer > 0 ? 0xffd166 : 0xff5577,
                         this.panicBoostTimer > 0 ? 3.2 : 2.5);
       }
-    } else if (this.kind === EnemyKind.Spiral) {
-      if (Math.random() < 0.5) {
+    } else if (isBossKind(this.kind)) {
+      if (Math.random() < 0.38) {
         const a = Math.random() * TAU;
-        const r = this.radius + rand(0, 18);
-        particles.trail(this.x + Math.cos(a) * r, this.y + Math.sin(a) * r, 0xff5577, 2);
+        const r = this.radius + rand(8, 28);
+        particles.trail(this.x + Math.cos(a) * r, this.y + Math.sin(a) * r, Math.random() < 0.25 ? 0xffd166 : 0xff5577, 2.2);
       }
     }
     if (this.kind === EnemyKind.EnvyLeech && Math.random() < 0.28) {
@@ -552,10 +608,12 @@ export class Enemy {
       [EnemyKind.VoidWraith]: 0xb070ff,
       [EnemyKind.Overthinker]: 0x6cf0ff,
       [EnemyKind.NumbOne]: 0x8c95a8,
-      [EnemyKind.Spiral]: 0xff5577
+      [EnemyKind.Spiral]: 0xff5577,
+      [EnemyKind.Mask]: 0xff77ff,
+      [EnemyKind.BurnoutBoss]: 0xff5b3a
     };
     const c = colorMap[this.kind];
-    const count = this.kind === EnemyKind.Spiral ? 60 : this.kind === EnemyKind.GuiltGiant ? 26 : 14;
+    const count = isBossKind(this.kind) ? 60 : this.kind === EnemyKind.GuiltGiant ? 26 : 14;
     particles.burst(this.x, this.y, {
       count, color: c,
       speedMin: 60, speedMax: 220,

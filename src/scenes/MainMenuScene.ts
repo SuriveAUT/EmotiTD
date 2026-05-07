@@ -4,7 +4,7 @@ import type { Scene } from '../core/Scene';
 import type { SceneManager } from '../core/SceneManager';
 import { saveManager, type SaveData } from '../core/SaveManager';
 import { APP_VERSION } from '../core/version';
-import { CANVAS, COLORS, DEFAULT_MAP, EMOTION_COLOR, MAP_LIST, type MapDefinition } from '../game/config';
+import { CANVAS, COLORS, DEFAULT_MAP, EMOTION_COLOR, MAP_LIST, MENU_COPY, type MapDefinition } from '../game/config';
 import { EmotionType } from '../game/types';
 import { makeHeadline, makeLabel, makeText } from '../ui/text';
 import { CreditsScene } from './CreditsScene';
@@ -75,7 +75,7 @@ export class MainMenuScene implements Scene {
   private buildUi(): void {
     const cx = CANVAS.width / 2;
 
-    const title = makeText('EMOTICORE TD', {
+    const title = makeText(MENU_COPY.title, {
       fontSize: 64,
       fontWeight: '900',
       letterSpacing: 7,
@@ -85,7 +85,7 @@ export class MainMenuScene implements Scene {
     title.anchor.set(0.5);
     title.position.set(cx, 120);
 
-    const subtitle = makeHeadline('Defend the Core of a breaking mind.', {
+    const subtitle = makeHeadline(MENU_COPY.subtitle, {
       fontSize: 18,
       fontWeight: '600',
       letterSpacing: 2,
@@ -103,7 +103,7 @@ export class MainMenuScene implements Scene {
     this.bestWaveText.position.set(cx, 232);
     this.refreshBestWave();
 
-    const mapLabel = makeLabel('SELECT MAP', {
+    const mapLabel = makeLabel(MENU_COPY.selectMap, {
       fontSize: 10,
       letterSpacing: 4,
       fill: COLORS.textDim
@@ -114,28 +114,28 @@ export class MainMenuScene implements Scene {
     const mapSelector = new Container();
     mapSelector.position.set(cx, 330);
     this.mapButtonDrawers = [];
-    mapSelector.addChild(...MAP_LIST.map((map, index) => this.createMapButton(map, (index - (MAP_LIST.length - 1) / 2) * 260, 0)));
+    mapSelector.addChild(...MAP_LIST.map((map, index) => this.createMapButton(map, (index - (MAP_LIST.length - 1) / 2) * 240, 0)));
 
     const buttonStartY = 410;
     const buttonGap = 64;
     const buttons = new Container();
     buttons.position.set(cx, buttonStartY);
     buttons.addChild(
-      this.createButton('START RUN', 0, 0 * buttonGap, 0xff5577, () => this.sceneManager.changeScene(new GameScene(this.app, {
+      this.createButton(MENU_COPY.startRun, 0, 0 * buttonGap, 0xff5577, () => this.sceneManager.changeScene(new GameScene(this.app, {
         mode: 'standard',
         map: this.selectedMap,
         onMainMenu: () => this.sceneManager.changeScene(new MainMenuScene(this.app, this.sceneManager))
       }))),
-      this.createButton('HOW TO PLAY', 0, 1 * buttonGap, 0x6cf0ff, () => {
+      this.createButton(MENU_COPY.howToPlay, 0, 1 * buttonGap, 0x6cf0ff, () => {
         this.sceneManager.changeScene(new HowToPlayScene(this.app, this.sceneManager));
       }),
-      this.createButton('SETTINGS', 0, 2 * buttonGap, 0xffd166, () => {
+      this.createButton(MENU_COPY.settings, 0, 2 * buttonGap, 0xffd166, () => {
         this.sceneManager.changeScene(new SettingsScene(this.app, this.sceneManager));
       }),
-      this.createButton('CREDITS', 0, 3 * buttonGap, 0xb070ff, () => {
+      this.createButton(MENU_COPY.credits, 0, 3 * buttonGap, 0xb070ff, () => {
         this.sceneManager.changeScene(new CreditsScene(this.app, this.sceneManager));
       }),
-      this.createButton('RESET SAVE', 0, 4 * buttonGap, 0xff3355, () => this.showResetConfirm())
+      this.createButton(MENU_COPY.resetSave, 0, 4 * buttonGap, 0xff3355, () => this.showResetConfirm())
     );
 
     const version = makeLabel(`v${APP_VERSION}`, {
@@ -146,7 +146,7 @@ export class MainMenuScene implements Scene {
     version.anchor.set(1, 1);
     version.position.set(CANVAS.width - 26, CANVAS.height - 24);
 
-    const signal = makeLabel('NEURAL CORE SIGNAL UNSTABLE', {
+    const signal = makeLabel(MENU_COPY.signal, {
       fontSize: 10,
       letterSpacing: 4,
       fill: 0xff5577
@@ -172,7 +172,7 @@ export class MainMenuScene implements Scene {
 
     bg.rect(0, 0, CANVAS.width, 160).fill({ color: COLORS.bg, alpha: 0.55 });
     bg.rect(0, CANVAS.height - 150, CANVAS.width, 150).fill({ color: COLORS.bg, alpha: 0.55 });
-    bg.roundRect(360, 70, 560, 690, 10)
+    bg.roundRect(220, 70, 840, 690, 10)
       .fill({ color: COLORS.panel, alpha: 0.34 })
       .stroke({ color: COLORS.panelEdge, width: 1, alpha: 0.65 });
     this.backgroundLayer.addChild(bg);
@@ -297,7 +297,7 @@ export class MainMenuScene implements Scene {
 
   private createMapButton(map: MapDefinition, x: number, y: number): Container {
     const button = new Container();
-    const width = 240;
+    const width = 220;
     const height = 60;
     const frame = new Graphics();
     const title = makeLabel(map.name.toUpperCase(), {
@@ -368,7 +368,7 @@ export class MainMenuScene implements Scene {
       .fill({ color: 0x05070d, alpha: 0.98 })
       .stroke({ color: COLORS.danger, width: 2, alpha: 0.95 });
 
-    const title = makeHeadline('RESET SAVE?', {
+    const title = makeHeadline(MENU_COPY.resetTitle, {
       fontSize: 20,
       fontWeight: '900',
       letterSpacing: 4,
@@ -377,7 +377,7 @@ export class MainMenuScene implements Scene {
     title.anchor.set(0.5);
     title.position.set(0, -52);
 
-    const body = makeLabel('This clears best wave, score and settings.', {
+    const body = makeLabel(MENU_COPY.resetBody, {
       fontSize: 11,
       letterSpacing: 2,
       fill: COLORS.textDim
@@ -385,12 +385,12 @@ export class MainMenuScene implements Scene {
     body.anchor.set(0.5);
     body.position.set(0, -16);
 
-    const confirm = this.createSmallButton('CONFIRM', -94, 50, COLORS.danger, () => {
+    const confirm = this.createSmallButton(MENU_COPY.confirm, -94, 50, COLORS.danger, () => {
       this.saveData = saveManager.reset();
       this.refreshBestWave();
       this.hideResetConfirm();
     });
-    const cancel = this.createSmallButton('CANCEL', 94, 50, COLORS.pathCore, () => this.hideResetConfirm());
+    const cancel = this.createSmallButton(MENU_COPY.cancel, 94, 50, COLORS.pathCore, () => this.hideResetConfirm());
 
     panel.position.set(CANVAS.width / 2, CANVAS.height / 2);
     panel.addChild(frame, title, body, confirm, cancel);
@@ -432,6 +432,6 @@ export class MainMenuScene implements Scene {
 
   private refreshBestWave(): void {
     if (!this.bestWaveText) return;
-    this.bestWaveText.text = `BEST WAVE  ${this.saveData.bestWave}      BEST SCORE  ${this.saveData.bestScore}`;
+    this.bestWaveText.text = MENU_COPY.best(this.saveData.bestWave, this.saveData.bestScore);
   }
 }

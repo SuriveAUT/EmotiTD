@@ -2,14 +2,14 @@ import { Application, Container, FederatedPointerEvent, Graphics, Text, Ticker }
 import { GlowFilter } from 'pixi-filters';
 import { audioManager } from '../core/AudioManager';
 import type { QualitySetting } from '../core/SaveManager';
-import { CANVAS, COLORS, DEFAULT_MAP, ECONOMY, EMOTION_COLOR, FIELD, TOWER_STATS, type BurnGroundSpec, type MapDefinition } from './config';
-import { EMOTION_TYPES, EmotionType, EnemyKind, type DamagePacket, type TargetingMode, type UpgradePath } from './types';
+import { CANVAS, COLORS, DEFAULT_MAP, ECONOMY, EMOTION_COLOR, ENEMY_STATS, FIELD, TOWER_STATS, type BurnGroundSpec, type MapDefinition } from './config';
+import { EMOTION_TYPES, EmotionType, EnemyKind, isBossKind, type DamagePacket, type TargetingMode, type UpgradePath } from './types';
 import { GameMap } from './GameMap';
 import { ParticleSystem } from './Particles';
 import { Tower } from './Tower';
 import { Enemy } from './Enemy';
 import { Projectile } from './Projectile';
-import { WaveManager } from './WaveManager';
+import { bossKindForWave, WaveManager } from './WaveManager';
 import { EmotionalBalance } from './EmotionalBalance';
 import { HUD } from '../ui/HUD';
 import { TowerBar } from '../ui/TowerBar';
@@ -20,6 +20,7 @@ import { TutorialManager } from './TutorialManager';
 import { STANDARD_MAX_WAVE, type GameMode } from './GameMode';
 import { SynergySystem } from './SynergySystem';
 import { RunStats } from './RunStats';
+import { DevToolsOverlay, type DevToolsSnapshot } from '../debug/DevToolsOverlay';
 
 interface GameState {
   stability: number;
@@ -56,6 +57,15 @@ interface GroundEffect {
   duration: number;
   remaining: number;
   tick: number;
+  gfx: Graphics;
+}
+
+interface OverheatZone {
+  x: number;
+  y: number;
+  radius: number;
+  duration: number;
+  remaining: number;
   gfx: Graphics;
 }
 
@@ -113,6 +123,7 @@ export class Game {
   private towers: Tower[] = [];
   private projectiles: Projectile[] = [];
   private groundEffects: GroundEffect[] = [];
+  private overheatZones: OverheatZone[] = [];
   private combatNotices: CombatNotice[] = [];
   private spiralPulseTimer = 5;
   private balanceDisruption = 0;
@@ -120,6 +131,9 @@ export class Game {
   private bossIntroOverlay: Container | null = null;
   private bossIntroWave: number | null = null;
   private lowStabilityPulseTimer = 0;
+  private maskResistTimer = 0;
+  private maskResistEmotion: EmotionType | null = null;
+  private burnoutZoneTimer = 4.5;
 
   private selectedTowerType: EmotionType | null = null;
   private selectedTower: Tower | null = null;
@@ -145,6 +159,7 @@ export class Game {
   private tutorial: TutorialManager | null = null;
   private victoryOverlay: Container | null = null;
   private pauseOverlay: Container | null = null;
+  private devTools: DevToolsOverlay | null = null;
 
   constructor(app: Application, saves: SaveManager = saveManager, options: GameOptions = {}) {
     this.app = app;
@@ -211,6 +226,19 @@ export class Game {
       onSell: () => this.sellSelectedTower()
     });
     this.uiLayer.addChild(this.hud.container, this.towerBar.container, this.sidePanel.container);
+    if (import.meta.env.DEV) {
+      this.devTools = new DevToolsOverlay({
+        addMemory: (amount) => this.devAddMemory(amount),
+        healCore: () => this.devHealCore(),
+        damageCore: (amount) => this.devDamageCore(amount),
+        jumpToWave: (wave) => this.devJumpToWave(wave),
+        spawnEnemy: (kind) => this.devSpawnEnemy(kind),
+        killAllEnemies: () => this.devKillAllEnemies(),
+        logRunStats: () => this.devLogRunStats(),
+        snapshot: () => this.devSnapshot()
+      });
+      this.uiLayer.addChild(this.devTools.container);
+    }
 
     if (!saveData.tutorialCompleted) {
       this.state.autoStartEnabled = false;
@@ -248,6 +276,7 @@ export class Game {
     this.app.ticker.remove(this.tick);
     this.detachInput();
     this.app.stage.removeChild(this.root);
+    this.devTools = null;
     this.tutorial = null;
     this.root.destroy({ children: true });
   }
@@ -527,10 +556,12 @@ export class Game {
     this.updateStatusNotice(rawDt);
     if (this.state.paused || this.state.defeat) {
       this.refreshUi();
+      this.devTools?.update(rawDt);
       return;
     }
     const dt = rawDt * this.state.speedMultiplier;
     this.update(dt);
+    this.devTools?.update(rawDt);
   };
 
   private update(dt: number) {
@@ -586,12 +617,14 @@ export class Game {
         this.addCombatNotice(e.x, e.y - e.radius - 10, `+${e.bounty}`, 0xffd166, 0.9);
         if (e.kind === EnemyKind.ShameSwarm) this.triggerShamePulse(e);
         e.spawnDeathParticles(this.particles);
-        if (e.kind === EnemyKind.Spiral) this.shake(1.2);
+        if (isBossKind(e.kind)) this.shake(1.2);
         this.removeEnemy(e, true);
       }
     }
 
     this.updateSpiralDisruption(dt);
+    this.updateMaskResistance(dt);
+    this.updateBurnoutOverheat(dt);
     this.updateEnvyLeeches(dt);
     this.updateLowStabilityWarning(dt);
     this.runStats.updateResonance(dt, this.balance.isResonating());
@@ -600,11 +633,13 @@ export class Game {
     const globalRateMul = this.balance.fireRateMul() * (this.balanceDisruption > 0 ? 1.08 : 1);
     for (const t of this.towers) {
       t.setSynergyModifiers(this.synergies.modifiersFor(t.type));
-      t.applyTowerAuras(this.towers, globalRateMul);
+      t.applyTowerAuras(this.towers, globalRateMul * this.overheatMulForTower(t));
       const specials = t.getSpecialStats();
       let damageMul = this.balance.damageMulFor(t.type);
       if (this.balance.isResonating()) damageMul *= specials.resonanceDamageMul;
       if (this.balanceDisruption > 0) damageMul *= 0.9;
+      damageMul *= t.loveDamageMulFrom(this.towers);
+      damageMul *= t.prideIsolationMulFrom(this.towers);
       t.setDamageMul(damageMul);
       t.update(dt, this.enemies, this.particles, (p) => this.spawnProjectile(p));
     }
@@ -626,6 +661,7 @@ export class Game {
     }
 
     this.updateGroundEffects(dt);
+    this.updateOverheatZones(dt);
 
     /* particles */
     this.particles.update(dt);
@@ -650,6 +686,82 @@ export class Game {
   }
 
   /* ------------------------------------------------------------------ */
+
+  private devAddMemory(amount: number): void {
+    this.gainMemory(amount, false);
+    this.showStatusNotice(`DEV +${amount} Memory`, 0.9);
+  }
+
+  private devHealCore(): void {
+    this.state.stability = ECONOMY.startingStability;
+    this.state.coreShield = 0;
+    this.map.redrawCore(1);
+    this.showStatusNotice('DEV Core healed', 0.9);
+    this.refreshUi();
+  }
+
+  private devDamageCore(amount: number): void {
+    this.coreHit(amount);
+    this.showStatusNotice(`DEV Core -${amount}`, 0.9);
+  }
+
+  private devJumpToWave(wave: number): void {
+    this.clearActiveEnemiesAndProjectiles();
+    this.hideVictoryOverlay();
+    this.hidePauseOverlay();
+    this.state.defeat = false;
+    this.state.victory = false;
+    this.state.paused = false;
+    this.state.betweenWaves = false;
+    this.state.autoStartIn = AUTO_START_SECONDS;
+    this.waves.setMaxWave(null);
+    this.waves.start(Math.max(1, Math.floor(wave)));
+    this.showStatusNotice(`DEV Wave ${this.waves.current}`, 1.1);
+    this.refreshSidePanel();
+    this.refreshUi();
+  }
+
+  private devSpawnEnemy(kind: EnemyKind): void {
+    this.spawnEnemy(kind, 1);
+    this.showStatusNotice(`DEV Spawn ${kind}`, 0.9);
+  }
+
+  private devKillAllEnemies(): void {
+    this.clearActiveEnemiesAndProjectiles();
+    this.showStatusNotice('DEV Enemies cleared', 0.9);
+    this.refreshUi();
+  }
+
+  private devLogRunStats(): void {
+    console.info('[EMOTICORE TD] RunStats', JSON.stringify(this.runStats.toJson(), null, 2));
+    this.showStatusNotice('DEV RunStats logged', 0.9);
+  }
+
+  private devSnapshot(): DevToolsSnapshot {
+    return {
+      wave: this.waves.current,
+      memory: this.state.memory,
+      stability: this.state.stability,
+      maxStability: ECONOMY.startingStability,
+      enemies: this.enemies.length,
+      towers: this.towers.length,
+      projectiles: this.projectiles.length,
+      score: this.runStats.score
+    };
+  }
+
+  private clearActiveEnemiesAndProjectiles(): void {
+    for (const e of this.enemies) {
+      this.enemiesLayer.removeChild(e.container);
+      e.destroy();
+    }
+    for (const p of this.projectiles) {
+      this.projectilesLayer.removeChild(p.container);
+      p.destroy();
+    }
+    this.enemies = [];
+    this.projectiles = [];
+  }
 
   private spawnEnemy(kind: EnemyKind, hpScale = 1) {
     const e = new Enemy(kind, hpScale);
@@ -683,16 +795,34 @@ export class Game {
   }
 
   private applyDamage(target: Enemy, packet: DamagePacket) {
+    const adjusted = { ...packet };
+    if (adjusted.shameGroupRadius !== undefined && adjusted.shameGroupDamageMul !== undefined) {
+      const r2 = adjusted.shameGroupRadius * adjusted.shameGroupRadius;
+      let packed = 0;
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
+        const dx = e.x - target.x;
+        const dy = e.y - target.y;
+        if (dx * dx + dy * dy <= r2) packed++;
+      }
+      if (packed >= 3) adjusted.amount *= adjusted.shameGroupDamageMul;
+    }
+    if (target.kind === EnemyKind.Mask && this.maskResistEmotion === adjusted.source && this.maskResistTimer > 0) {
+      adjusted.amount *= 0.42;
+      if (Math.random() < 0.18) {
+        this.particles.ring(target.x, target.y, { color: EMOTION_COLOR[adjusted.source], startRadius: 10, endRadius: 42, duration: 0.25, thickness: 2, alpha: 0.55 });
+      }
+    }
     const before = target.hp;
-    target.takeDamage(packet);
+    target.takeDamage(adjusted);
     const dealt = Math.max(0, before - Math.max(0, target.hp));
-    this.runStats.recordDamage(packet.source, dealt);
-    if (packet.coreShield !== undefined && dealt > 0) {
-      const bonus = packet.source === EmotionType.Trust && (target.kind === EnemyKind.PanicRunner || target.kind === EnemyKind.VoidWraith) ? 1.65 : 1;
-      this.state.coreShield = Math.min(8, this.state.coreShield + packet.coreShield * bonus);
+    this.runStats.recordDamage(adjusted.source, dealt);
+    if (adjusted.coreShield !== undefined && dealt > 0) {
+      const bonus = adjusted.source === EmotionType.Trust && (target.kind === EnemyKind.PanicRunner || target.kind === EnemyKind.VoidWraith) ? 1.65 : 1;
+      this.state.coreShield = Math.min(8, this.state.coreShield + adjusted.coreShield * bonus);
     }
     if (dealt >= 1) {
-      this.addCombatNotice(target.x, target.y - target.radius - 12, `-${Math.round(dealt)}`, EMOTION_COLOR[packet.source], 0.55);
+      this.addCombatNotice(target.x, target.y - target.radius - 12, `-${Math.round(dealt)}`, EMOTION_COLOR[adjusted.source], 0.55);
     }
   }
 
@@ -749,6 +879,46 @@ export class Game {
     g.circle(effect.x, effect.y, effect.radius).fill({ color: c, alpha: 0.08 + (1 - t) * 0.08 });
     g.circle(effect.x, effect.y, effect.radius * (0.55 + 0.45 * t)).stroke({ color: c, width: 2, alpha: 0.35 * (1 - t) });
     g.circle(effect.x, effect.y, effect.radius).stroke({ color: 0xffd166, width: 1.4, alpha: 0.45 * (1 - t) });
+  }
+
+  private spawnOverheatZone(x: number, y: number): void {
+    const gfx = new Graphics();
+    const zone: OverheatZone = { x, y, radius: 86, duration: 5.5, remaining: 5.5, gfx };
+    this.effectsLayer.addChild(gfx);
+    this.overheatZones.push(zone);
+    this.drawOverheatZone(zone);
+  }
+
+  private updateOverheatZones(dt: number): void {
+    for (let i = this.overheatZones.length - 1; i >= 0; i--) {
+      const zone = this.overheatZones[i];
+      zone.remaining -= dt;
+      if (zone.remaining <= 0) {
+        this.effectsLayer.removeChild(zone.gfx);
+        zone.gfx.destroy();
+        this.overheatZones.splice(i, 1);
+      } else {
+        this.drawOverheatZone(zone);
+      }
+    }
+  }
+
+  private drawOverheatZone(zone: OverheatZone): void {
+    const t = 1 - zone.remaining / zone.duration;
+    const g = zone.gfx;
+    g.clear();
+    g.circle(zone.x, zone.y, zone.radius).fill({ color: 0xff5b3a, alpha: 0.09 + (1 - t) * 0.06 });
+    g.circle(zone.x, zone.y, zone.radius * (0.45 + 0.55 * t)).stroke({ color: 0xffd166, width: 2, alpha: 0.42 * (1 - t) });
+    g.circle(zone.x, zone.y, zone.radius).stroke({ color: 0xff5b3a, width: 1.6, alpha: 0.58 * (1 - t) });
+  }
+
+  private overheatMulForTower(tower: Tower): number {
+    for (const zone of this.overheatZones) {
+      const dx = tower.x - zone.x;
+      const dy = tower.y - zone.y;
+      if (dx * dx + dy * dy <= zone.radius * zone.radius) return 1.32;
+    }
+    return 1;
   }
 
   private coreHit(amount: number) {
@@ -813,7 +983,7 @@ export class Game {
     const def = this.waves.nextDef();
     if (!def) return;
     if (def.isBoss) {
-      this.showBossIntro(next, 'THE SPIRAL');
+      this.showBossIntro(next, ENEMY_STATS[bossKindForWave(next)].label.toUpperCase());
       return;
     }
     this.beginWave(next, false);
@@ -985,6 +1155,47 @@ export class Game {
     });
   }
 
+  private updateMaskResistance(dt: number) {
+    const mask = this.enemies.find(e => e.kind === EnemyKind.Mask && e.alive);
+    if (!this.waves.active || !mask) {
+      this.maskResistTimer = 0;
+      this.maskResistEmotion = null;
+      return;
+    }
+    this.maskResistTimer -= dt;
+    if (this.maskResistTimer > 0 && this.maskResistEmotion) return;
+    const top = this.runStats.summary().topDamageEmotion;
+    if (!top) {
+      this.maskResistTimer = 2.5;
+      return;
+    }
+    this.maskResistEmotion = top;
+    this.maskResistTimer = 5.8;
+    this.showStatusNotice(`THE MASK resists ${top.toUpperCase()}`, 1.6);
+    this.particles.ring(mask.x, mask.y, {
+      color: EMOTION_COLOR[top], startRadius: 24, endRadius: 130, duration: 0.65, thickness: 3, alpha: 0.82
+    });
+  }
+
+  private updateBurnoutOverheat(dt: number) {
+    const burnout = this.enemies.find(e => e.kind === EnemyKind.BurnoutBoss && e.alive);
+    if (!this.waves.active || !burnout) {
+      this.burnoutZoneTimer = 4.5;
+      return;
+    }
+    this.burnoutZoneTimer -= dt;
+    if (this.burnoutZoneTimer > 0) return;
+    this.burnoutZoneTimer = 5.8;
+    const target = this.towers.length > 0
+      ? this.towers[Math.floor(Math.random() * this.towers.length)]
+      : null;
+    const x = target ? target.x : burnout.x;
+    const y = target ? target.y : burnout.y;
+    this.spawnOverheatZone(x, y);
+    this.showStatusNotice('THE BURNOUT creates an Overheat zone', 1.6);
+    this.shake(0.45);
+  }
+
   private updateEnvyLeeches(dt: number) {
     if (this.leechNoticeTimer > 0) this.leechNoticeTimer = Math.max(0, this.leechNoticeTimer - dt);
     for (const e of this.enemies) {
@@ -1124,6 +1335,7 @@ export class Game {
     for (const e of this.enemies) e.destroy();
     for (const p of this.projectiles) p.destroy();
     for (const effect of this.groundEffects) effect.gfx.destroy();
+    for (const zone of this.overheatZones) zone.gfx.destroy();
     for (const n of this.combatNotices) n.text.destroy();
     if (this.bossIntroOverlay) {
       this.uiLayer.removeChild(this.bossIntroOverlay);
@@ -1135,6 +1347,7 @@ export class Game {
     this.enemies = [];
     this.projectiles = [];
     this.groundEffects = [];
+    this.overheatZones = [];
     this.combatNotices = [];
     this.towersLayer.removeChildren();
     this.enemiesLayer.removeChildren();
@@ -1178,6 +1391,9 @@ export class Game {
     this.balanceDisruption = 0;
     this.leechNoticeTimer = 0;
     this.spiralPulseTimer = 5;
+    this.maskResistTimer = 0;
+    this.maskResistEmotion = null;
+    this.burnoutZoneTimer = 4.5;
     this.bossIntroWave = null;
     this.lowStabilityPulseTimer = 0;
     this.selectedTowerType = null;

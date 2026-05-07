@@ -1,5 +1,5 @@
 import { Container, Graphics, Text } from 'pixi.js';
-import { CANVAS, COLORS, ECONOMY, EMOTION_COLOR } from '../game/config';
+import { CANVAS, COLORS, ECONOMY, EMOTION_COLOR, HUD_COPY } from '../game/config';
 import { EMOTION_TYPES } from '../game/types';
 import type { EmotionalBalance } from '../game/EmotionalBalance';
 import { makeLabel, makeText, makeHeadline } from './text';
@@ -11,7 +11,7 @@ export interface HUDState {
   score: number;
   wave: number;
   betweenWaves: boolean;
-  countdown: number; // seconds until next wave auto-start, or -1 if last
+  countdown: number;
   paused: boolean;
   speedMultiplier: number;
   autoStartEnabled: boolean;
@@ -20,11 +20,6 @@ export interface HUDState {
   notice: string;
 }
 
-/* ------------------------------------------------------------------ *
- *  HUD layout — every cell sits in its own x slot. Balance value is
- *  stacked vertically under the dots so it never collides with the
- *  right-aligned STATUS text on long messages.
- * ------------------------------------------------------------------ */
 const COL = {
   stability: 24,
   memory: 232,
@@ -60,8 +55,7 @@ export class HUD {
     this.container.addChild(this.bg);
     this.drawBg();
 
-    /* ------------- Stability ------------- */
-    this.stabLabel = makeLabel('CORE STABILITY', { fontSize: 9, letterSpacing: 2 });
+    this.stabLabel = makeLabel(HUD_COPY.coreStability, { fontSize: 9, letterSpacing: 2 });
     this.stabLabel.position.set(COL.stability, 10);
     this.container.addChild(this.stabLabel);
 
@@ -73,8 +67,7 @@ export class HUD {
     this.stabValue.position.set(COL.stability + 158, 28);
     this.container.addChild(this.stabValue);
 
-    /* ------------- Memory ------------- */
-    this.memoryLabel = makeLabel('MEMORY', { fontSize: 9, letterSpacing: 2 });
+    this.memoryLabel = makeLabel(HUD_COPY.memory, { fontSize: 9, letterSpacing: 2 });
     this.memoryLabel.position.set(COL.memory, 10);
     this.container.addChild(this.memoryLabel);
 
@@ -82,8 +75,7 @@ export class HUD {
     this.memoryValue.position.set(COL.memory, 24);
     this.container.addChild(this.memoryValue);
 
-    /* ------------- Score ------------- */
-    this.scoreLabel = makeLabel('SCORE', { fontSize: 9, letterSpacing: 2 });
+    this.scoreLabel = makeLabel(HUD_COPY.score, { fontSize: 9, letterSpacing: 2 });
     this.scoreLabel.position.set(COL.score, 10);
     this.container.addChild(this.scoreLabel);
 
@@ -91,8 +83,7 @@ export class HUD {
     this.scoreValue.position.set(COL.score, 26);
     this.container.addChild(this.scoreValue);
 
-    /* ------------- Wave ------------- */
-    this.waveLabel = makeLabel('WAVE', { fontSize: 9, letterSpacing: 2 });
+    this.waveLabel = makeLabel(HUD_COPY.wave, { fontSize: 9, letterSpacing: 2 });
     this.waveLabel.position.set(COL.wave, 10);
     this.container.addChild(this.waveLabel);
 
@@ -100,8 +91,7 @@ export class HUD {
     this.waveValue.position.set(COL.wave, 24);
     this.container.addChild(this.waveValue);
 
-    /* ------------- Balance (label / dots / value stacked) ------------- */
-    this.balanceLabel = makeLabel('EMOTIONAL BALANCE', { fontSize: 10, letterSpacing: 2 });
+    this.balanceLabel = makeLabel(HUD_COPY.emotionalBalance, { fontSize: 10, letterSpacing: 2 });
     this.balanceLabel.position.set(COL.balance, 8);
     this.container.addChild(this.balanceLabel);
 
@@ -109,12 +99,11 @@ export class HUD {
     this.balanceDots.position.set(COL.balance + 6, 30);
     this.container.addChild(this.balanceDots);
 
-    this.balanceValue = makeText('—', { fontSize: 11, fill: 0xe8edf2, letterSpacing: 1, fontWeight: '700' });
+    this.balanceValue = makeText('-', { fontSize: 11, fill: 0xe8edf2, letterSpacing: 1, fontWeight: '700' });
     this.balanceValue.position.set(COL.balance, 46);
     this.container.addChild(this.balanceValue);
 
-    /* ------------- Status (right) ------------- */
-    this.statusLabel = makeLabel('STATUS', { fontSize: 9, letterSpacing: 2 });
+    this.statusLabel = makeLabel(HUD_COPY.status, { fontSize: 9, letterSpacing: 2 });
     this.statusLabel.anchor.set(1, 0);
     this.statusLabel.position.set(COL.status, 10);
     this.container.addChild(this.statusLabel);
@@ -136,14 +125,12 @@ export class HUD {
     g.rect(0, CANVAS.hudHeight - 2, CANVAS.width, 1)
       .fill({ color: 0x6cf0ff, alpha: 0.18 });
 
-    // subtle column dividers so each cell reads as its own
     for (const x of [COL.memory - 14, COL.score - 12, COL.wave - 12, COL.balance - 14]) {
       g.rect(x, 12, 1, CANVAS.hudHeight - 20).fill({ color: COLORS.panelEdge, alpha: 0.55 });
     }
   }
 
   update(state: HUDState, balance: EmotionalBalance) {
-    /* ----- stability bar ----- */
     const ratio = Math.max(0, state.stability / state.maxStability);
     const barW = 148, barH = 10;
     const stabColor =
@@ -156,51 +143,48 @@ export class HUD {
     this.stabValue.text = `${state.stability}/${state.maxStability}`;
     this.stabValue.style.fill = stabColor;
 
-    /* ----- memory ----- */
     this.memoryValue.text = `${state.memory}`;
-
-    /* ----- score ----- */
     this.scoreValue.text = `${state.score}`;
-
-    /* ----- wave ----- */
     this.waveValue.text = `${state.wave}`;
 
-    /* ----- balance ----- */
     this.drawBalanceDots(balance);
     if (balance.isResonating()) {
-      this.balanceValue.text = state.synergyStatus === 'NO SYNERGY' ? 'RESONANCE' : `RESONANCE · ${state.synergyStatus}`;
+      this.balanceValue.text = state.synergyStatus === HUD_COPY.noSynergy
+        ? HUD_COPY.resonance
+        : `${HUD_COPY.resonance} / ${state.synergyStatus}`;
       this.balanceValue.style.fill = 0x77ffaa;
     } else if (balance.dominant()) {
-      this.balanceValue.text = state.synergyStatus === 'NO SYNERGY' ? 'IMBALANCE' : `IMBALANCE · ${state.synergyStatus}`;
+      this.balanceValue.text = state.synergyStatus === HUD_COPY.noSynergy
+        ? HUD_COPY.imbalance
+        : `${HUD_COPY.imbalance} / ${state.synergyStatus}`;
       this.balanceValue.style.fill = 0xff5577;
     } else if (balance.totalTowers() === 0) {
-      this.balanceValue.text = 'NEUTRAL';
+      this.balanceValue.text = HUD_COPY.neutral;
       this.balanceValue.style.fill = 0x7d8ba6;
     } else {
-      this.balanceValue.text = state.synergyStatus === 'NO SYNERGY' ? 'BUILDING' : state.synergyStatus;
-      this.balanceValue.style.fill = state.synergyStatus === 'NO SYNERGY' ? 0xffd166 : 0x77ffaa;
+      this.balanceValue.text = state.synergyStatus === HUD_COPY.noSynergy ? HUD_COPY.building : state.synergyStatus;
+      this.balanceValue.style.fill = state.synergyStatus === HUD_COPY.noSynergy ? 0xffd166 : 0x77ffaa;
     }
 
-    /* ----- status (right) ----- */
     if (state.paused) {
-      this.statusText.text = `PAUSED · ${state.speedMultiplier}X`;
+      this.statusText.text = `${HUD_COPY.paused} / ${state.speedMultiplier}X`;
       this.statusText.style.fill = 0xffd166;
     } else if (state.notice) {
       this.statusText.text = state.notice;
       this.statusText.style.fill = 0xffd166;
     } else if (state.balanceDisruption > 0) {
-      this.statusText.text = `SPIRAL DISRUPTION ${state.balanceDisruption.toFixed(1)}S`;
+      this.statusText.text = `${HUD_COPY.spiralDisruption} ${state.balanceDisruption.toFixed(1)}S`;
       this.statusText.style.fill = 0xff5577;
     } else if (state.betweenWaves) {
       if (state.countdown >= 0) {
-        const prefix = state.autoStartEnabled ? `NEXT WAVE  ${state.countdown.toFixed(1)}s` : 'AUTO OFF';
-        this.statusText.text = `${prefix} · SPACE TO START`;
+        const prefix = state.autoStartEnabled ? `${HUD_COPY.nextWave}  ${state.countdown.toFixed(1)}s` : HUD_COPY.autoOff;
+        this.statusText.text = `${prefix} / ${HUD_COPY.spaceToStart}`;
         this.statusText.style.fill = 0x6cf0ff;
       } else {
         this.statusText.text = '';
       }
     } else {
-      this.statusText.text = `WAVE ${state.wave} · ${state.speedMultiplier}X`;
+      this.statusText.text = `${HUD_COPY.wave} ${state.wave} / ${state.speedMultiplier}X`;
       this.statusText.style.fill = 0x6cf0ff;
     }
   }

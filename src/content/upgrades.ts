@@ -56,6 +56,13 @@ export interface TowerUpgradeBonus {
   coreShieldAdd?: number;
   coreShieldMul?: number;
   trustAnchorDurationAdd?: number;
+  shameGroupRadiusAdd?: number;
+  shameGroupDamageMul?: number;
+  loveLinkRadiusAdd?: number;
+  loveFireRateMul?: number;
+  loveDamageMul?: number;
+  prideIsolationRadiusMul?: number;
+  prideIsolationDamageMul?: number;
 }
 
 export interface TowerUpgradeLevel {
@@ -87,28 +94,28 @@ export const TOWER_UPGRADES: Record<EmotionType, Record<UpgradePath, TowerUpgrad
     A: {
       id: 'A',
       title: 'BIGGER RAGE',
-      role: 'Mehr Splash-Radius',
+      role: 'More splash radius',
       levels: [
-        { cost: 55, summary: '+16 Splash, +8% Schaden', bonus: { splashRadiusAdd: 16, damageMul: 1.08 } },
-        { cost: 85, summary: '+24 Splash, +10% Schaden', bonus: { splashRadiusAdd: 24, damageMul: 1.10 } }
+        { cost: 60, summary: '+16 Splash, +8% Damage', bonus: { splashRadiusAdd: 16, damageMul: 1.08 } },
+        { cost: 95, summary: '+24 Splash, +10% Damage', bonus: { splashRadiusAdd: 24, damageMul: 1.10 } }
       ]
     },
     B: {
       id: 'B',
       title: 'BURNING GROUND',
-      role: 'Feuerzone nach Treffern',
+      role: 'Burn zone on hit',
       levels: [
-        { cost: 60, summary: 'Boden brennt 1.8s', bonus: { burnGround: { radius: 44, duration: 1.8, dps: 10 } } },
-        { cost: 90, summary: 'Größere Feuerzone', bonus: { burnGround: { radius: 56, duration: 2.4, dps: 16 } } }
+        { cost: 65, summary: 'Ground burns 1.8s', bonus: { burnGround: { radius: 44, duration: 1.8, dps: 10 } } },
+        { cost: 105, summary: 'Larger burn zone', bonus: { burnGround: { radius: 56, duration: 2.4, dps: 16 } } }
       ]
     },
     C: {
       id: 'C',
       title: 'FOCUSED ANGER',
-      role: 'Weniger Flaeche, mehr Boss-Druck',
+      role: 'Less area, more boss pressure',
       levels: [
-        { cost: 65, summary: '+16% Schaden, +35% Boss', bonus: { damageMul: 1.16, splashRadiusMul: 0.9, bossDamageMul: 1.35 } },
-        { cost: 95, summary: '+18% Schaden, +25% Boss', bonus: { damageMul: 1.18, splashRadiusMul: 0.88, bossDamageMul: 1.25 } }
+        { cost: 70, summary: '+16% Damage, +35% Boss', bonus: { damageMul: 1.16, splashRadiusMul: 0.9, bossDamageMul: 1.35 } },
+        { cost: 110, summary: '+18% Damage, +25% Boss', bonus: { damageMul: 1.18, splashRadiusMul: 0.88, bossDamageMul: 1.25 } }
       ]
     }
   },
@@ -116,28 +123,28 @@ export const TOWER_UPGRADES: Record<EmotionType, Record<UpgradePath, TowerUpgrad
     A: {
       id: 'A',
       title: 'DEEPER BLUE',
-      role: 'Staerkerer Slow',
+      role: 'Stronger slow',
       levels: [
-        { cost: 55, summary: 'Slow + Dauer besser', bonus: { slowAmountMul: 0.86, slowDurationAdd: 0.45 } },
-        { cost: 80, summary: 'Slow nochmals besser', bonus: { slowAmountMul: 0.84, slowDurationAdd: 0.6 } }
+        { cost: 52, summary: 'Better slow duration', bonus: { slowAmountMul: 0.86, slowDurationAdd: 0.45 } },
+        { cost: 88, summary: 'Even stronger slow', bonus: { slowAmountMul: 0.84, slowDurationAdd: 0.6 } }
       ]
     },
     B: {
       id: 'B',
       title: 'LONG RAIN',
-      role: 'Sniper-Reichweite',
+      role: 'Sniper range',
       levels: [
-        { cost: 60, summary: '+34 Reichweite', bonus: { rangeAdd: 34, fireRateMul: 1.04 } },
-        { cost: 90, summary: '+46 Reichweite, +10% Schaden', bonus: { rangeAdd: 46, damageMul: 1.10 } }
+        { cost: 58, summary: '+34 Range', bonus: { rangeAdd: 34, fireRateMul: 1.04 } },
+        { cost: 98, summary: '+46 Range, +10% Damage', bonus: { rangeAdd: 46, damageMul: 1.10 } }
       ]
     },
     C: {
       id: 'C',
       title: 'BLUE FRACTURE',
-      role: 'Splitter gegen Gruppen',
+      role: 'Split shots for groups',
       levels: [
-        { cost: 65, summary: '+1 Splitter-Schuss', bonus: { splitShotsAdd: 1, splitDamageMul: 0.52 } },
-        { cost: 95, summary: '+1 Splitter, schneller', bonus: { splitShotsAdd: 1, projectileSpeedMul: 1.12, splitDamageMul: 0.58 } }
+        { cost: 68, summary: '+1 Split shot', bonus: { splitShotsAdd: 1, splitDamageMul: 0.52 } },
+        { cost: 108, summary: '+1 Split, faster', bonus: { splitShotsAdd: 1, projectileSpeedMul: 1.12, splitDamageMul: 0.58 } }
       ]
     }
   },
@@ -145,28 +152,28 @@ export const TOWER_UPGRADES: Record<EmotionType, Record<UpgradePath, TowerUpgrad
     A: {
       id: 'A',
       title: 'BRIGHTER CHAIN',
-      role: 'Mehr Kettenziele',
+      role: 'More chain targets',
       levels: [
-        { cost: 65, summary: '+1 Chain, +20 Range', bonus: { chainCountAdd: 1, chainRangeAdd: 20 } },
-        { cost: 95, summary: '+1 Chain, +30 Range', bonus: { chainCountAdd: 1, chainRangeAdd: 30 } }
+        { cost: 72, summary: '+1 Chain, +20 Range', bonus: { chainCountAdd: 1, chainRangeAdd: 20 } },
+        { cost: 112, summary: '+1 Chain, +30 Range', bonus: { chainCountAdd: 1, chainRangeAdd: 30 } }
       ]
     },
     B: {
       id: 'B',
       title: 'SPARK TEMPO',
-      role: 'Schnellere Ketten',
+      role: 'Faster chains',
       levels: [
-        { cost: 60, summary: '+14% Tempo, +8% Projektil', bonus: { fireRateMul: 0.86, projectileSpeedMul: 1.08 } },
-        { cost: 90, summary: '+12% Tempo, +12% Projektil', bonus: { fireRateMul: 0.88, projectileSpeedMul: 1.12 } }
+        { cost: 68, summary: '+14% Tempo, +8% Projectile', bonus: { fireRateMul: 0.86, projectileSpeedMul: 1.08 } },
+        { cost: 108, summary: '+12% Tempo, +12% Projectile', bonus: { fireRateMul: 0.88, projectileSpeedMul: 1.12 } }
       ]
     },
     C: {
       id: 'C',
       title: 'RESONANT JOY',
-      role: 'Bonus bei gemischten Builds',
+      role: 'Bonus for mixed builds',
       levels: [
-        { cost: 70, summary: '+18% Schaden in Resonance', bonus: { resonanceDamageMul: 1.18 } },
-        { cost: 100, summary: '+18% Resonance, +10 Range', bonus: { resonanceDamageMul: 1.18, rangeAdd: 10 } }
+        { cost: 74, summary: '+18% Damage in Resonance', bonus: { resonanceDamageMul: 1.18 } },
+        { cost: 112, summary: '+18% Resonance, +10 Range', bonus: { resonanceDamageMul: 1.18, rangeAdd: 10 } }
       ]
     }
   },
@@ -174,28 +181,28 @@ export const TOWER_UPGRADES: Record<EmotionType, Record<UpgradePath, TowerUpgrad
     A: {
       id: 'A',
       title: 'DEEP GLITCH',
-      role: 'Mehr Stun',
+      role: 'More stun',
       levels: [
-        { cost: 55, summary: '+12% Chance, +0.15s', bonus: { fearChanceAdd: 0.12, stunDurationAdd: 0.15 } },
-        { cost: 85, summary: '+10% Chance, +0.20s', bonus: { fearChanceAdd: 0.10, stunDurationAdd: 0.20 } }
+        { cost: 60, summary: '+12% Chance, +0.15s', bonus: { fearChanceAdd: 0.12, stunDurationAdd: 0.15 } },
+        { cost: 96, summary: '+10% Chance, +0.20s', bonus: { fearChanceAdd: 0.10, stunDurationAdd: 0.20 } }
       ]
     },
     B: {
       id: 'B',
       title: 'AREA FLICKER',
-      role: 'AoE-Glitch',
+      role: 'AoE glitch',
       levels: [
-        { cost: 65, summary: 'Kleine Glitch-Zone', bonus: { splashRadiusAdd: 28, damageMul: 1.05 } },
-        { cost: 95, summary: 'Größere Glitch-Zone', bonus: { splashRadiusAdd: 18, fearChanceAdd: 0.08 } }
+        { cost: 70, summary: 'Small glitch zone', bonus: { splashRadiusAdd: 28, damageMul: 1.05 } },
+        { cost: 108, summary: 'Larger glitch zone', bonus: { splashRadiusAdd: 18, fearChanceAdd: 0.08 } }
       ]
     },
     C: {
       id: 'C',
       title: 'CHASE PANIC',
-      role: 'Bonus gegen schnelle Gegner',
+      role: 'Bonus vs fast enemies',
       levels: [
-        { cost: 60, summary: '+40% vs schnelle Gegner', bonus: { fastEnemyDamageMul: 1.40 } },
-        { cost: 90, summary: '+25% vs schnelle Gegner', bonus: { fastEnemyDamageMul: 1.25, projectileSpeedMul: 1.12 } }
+        { cost: 66, summary: '+40% vs fast enemies', bonus: { fastEnemyDamageMul: 1.40 } },
+        { cost: 104, summary: '+25% vs fast enemies', bonus: { fastEnemyDamageMul: 1.25, projectileSpeedMul: 1.12 } }
       ]
     }
   },
@@ -203,28 +210,28 @@ export const TOWER_UPGRADES: Record<EmotionType, Record<UpgradePath, TowerUpgrad
     A: {
       id: 'A',
       title: 'WIDER MIST',
-      role: 'Mehr Buff-Radius',
+      role: 'More buff radius',
       levels: [
-        { cost: 60, summary: '+28 Buff-Radius', bonus: { buffRadiusAdd: 28, rangeAdd: 10 } },
-        { cost: 90, summary: '+36 Buff-Radius', bonus: { buffRadiusAdd: 36, rangeAdd: 10 } }
+        { cost: 56, summary: '+28 Buff Radius', bonus: { buffRadiusAdd: 28, rangeAdd: 10 } },
+        { cost: 94, summary: '+36 Buff Radius', bonus: { buffRadiusAdd: 36, rangeAdd: 10 } }
       ]
     },
     B: {
       id: 'B',
       title: 'SOFTER TEMPO',
-      role: 'Staerkerer Tempo-Buff',
+      role: 'Stronger tempo buff',
       levels: [
-        { cost: 65, summary: 'Buff nochmal schneller', bonus: { buffFireRateMul: 0.93 } },
-        { cost: 95, summary: 'Buff nochmals schneller', bonus: { buffFireRateMul: 0.92, buffRadiusAdd: 10 } }
+        { cost: 62, summary: 'Faster buff', bonus: { buffFireRateMul: 0.93 } },
+        { cost: 104, summary: 'Even faster buff', bonus: { buffFireRateMul: 0.92, buffRadiusAdd: 10 } }
       ]
     },
     C: {
       id: 'C',
       title: 'RESTORE CORE',
-      role: 'Stability nach Wellen',
+      role: 'Stability after waves',
       levels: [
-        { cost: 70, summary: '+1 Stability pro Welle', bonus: { stabilityOnWaveCompleteAdd: 1 } },
-        { cost: 100, summary: '+1 Stability, +8% Schaden', bonus: { stabilityOnWaveCompleteAdd: 1, damageMul: 1.08 } }
+        { cost: 66, summary: '+1 Stability per wave', bonus: { stabilityOnWaveCompleteAdd: 1 } },
+        { cost: 108, summary: '+1 Stability, +8% Damage', bonus: { stabilityOnWaveCompleteAdd: 1, damageMul: 1.08 } }
       ]
     }
   },
@@ -232,28 +239,28 @@ export const TOWER_UPGRADES: Record<EmotionType, Record<UpgradePath, TowerUpgrad
     A: {
       id: 'A',
       title: 'BRIGHTER SIGNAL',
-      role: 'Mehr Schaden und Reichweite',
+      role: 'More damage and range',
       levels: [
-        { cost: 70, summary: '+16% Schaden, +18 Reichweite', bonus: { damageMul: 1.16, rangeAdd: 18 } },
-        { cost: 105, summary: '+18% Schaden, +24 Reichweite', bonus: { damageMul: 1.18, rangeAdd: 24 } }
+        { cost: 74, summary: '+16% Damage, +18 Range', bonus: { damageMul: 1.16, rangeAdd: 18 } },
+        { cost: 118, summary: '+18% Damage, +24 Range', bonus: { damageMul: 1.18, rangeAdd: 24 } }
       ]
     },
     B: {
       id: 'B',
       title: 'STARBREAK',
-      role: 'Stärker gegen Numb Ones',
+      role: 'Stronger vs Numb Ones',
       levels: [
-        { cost: 75, summary: '+45% vs Numb Ones', bonus: { numbDamageMul: 1.45, projectileSpeedMul: 1.08 } },
-        { cost: 110, summary: '+40% vs Numb Ones', bonus: { numbDamageMul: 1.40, damageMul: 1.08 } }
+        { cost: 76, summary: '+45% vs Numb Ones', bonus: { numbDamageMul: 1.45, projectileSpeedMul: 1.08 } },
+        { cost: 122, summary: '+40% vs Numb Ones', bonus: { numbDamageMul: 1.40, damageMul: 1.08 } }
       ]
     },
     C: {
       id: 'C',
       title: 'GUIDING LIGHT',
-      role: 'Stabilität durch Hoffnung',
+      role: 'Stability through Hope',
       levels: [
-        { cost: 80, summary: '+1 Stability pro Welle', bonus: { stabilityOnWaveCompleteAdd: 1, rangeAdd: 10 } },
-        { cost: 115, summary: '+1 Stability, schneller', bonus: { stabilityOnWaveCompleteAdd: 1, fireRateMul: 0.9 } }
+        { cost: 78, summary: '+1 Stability per wave', bonus: { stabilityOnWaveCompleteAdd: 1, rangeAdd: 10 } },
+        { cost: 124, summary: '+1 Stability, faster', bonus: { stabilityOnWaveCompleteAdd: 1, fireRateMul: 0.9 } }
       ]
     }
   },
@@ -261,28 +268,28 @@ export const TOWER_UPGRADES: Record<EmotionType, Record<UpgradePath, TowerUpgrad
     A: {
       id: 'A',
       title: 'THICKER TOXIN',
-      role: 'Staerkerer Schaden ueber Zeit',
+      role: 'Stronger damage over time',
       levels: [
-        { cost: 65, summary: '+22% Gift, +0.4s', bonus: { poisonDpsMul: 1.22, poisonDurationAdd: 0.4 } },
-        { cost: 95, summary: '+20% Gift, +0.5s', bonus: { poisonDpsMul: 1.20, poisonDurationAdd: 0.5 } }
+        { cost: 72, summary: '+22% Poison, +0.4s', bonus: { poisonDpsMul: 1.22, poisonDurationAdd: 0.4 } },
+        { cost: 112, summary: '+20% Poison, +0.5s', bonus: { poisonDpsMul: 1.20, poisonDurationAdd: 0.5 } }
       ]
     },
     B: {
       id: 'B',
       title: 'CORROSIVE BITE',
-      role: 'Mehr Armor-Shred',
+      role: 'More armor shred',
       levels: [
-        { cost: 70, summary: '+5% Shred, +0.4s', bonus: { armorShredAdd: 0.05, armorShredDurationAdd: 0.4 } },
-        { cost: 100, summary: '+5% Shred, +12 Range', bonus: { armorShredAdd: 0.05, rangeAdd: 12 } }
+        { cost: 74, summary: '+5% Shred, +0.4s', bonus: { armorShredAdd: 0.05, armorShredDurationAdd: 0.4 } },
+        { cost: 116, summary: '+5% Shred, +12 Range', bonus: { armorShredAdd: 0.05, rangeAdd: 12 } }
       ]
     },
     C: {
       id: 'C',
       title: 'CONTAGION',
-      role: 'Konservativer Flaechendruck',
+      role: 'Controlled area pressure',
       levels: [
-        { cost: 75, summary: '+24 Splash, weniger Tempo', bonus: { splashRadiusAdd: 24, fireRateMul: 1.06 } },
-        { cost: 105, summary: '+18 Splash, +10% Schaden', bonus: { splashRadiusAdd: 18, damageMul: 1.10 } }
+        { cost: 80, summary: '+24 Splash, less tempo', bonus: { splashRadiusAdd: 24, fireRateMul: 1.06 } },
+        { cost: 122, summary: '+18 Splash, +10% Damage', bonus: { splashRadiusAdd: 18, damageMul: 1.10 } }
       ]
     }
   },
@@ -290,28 +297,28 @@ export const TOWER_UPGRADES: Record<EmotionType, Record<UpgradePath, TowerUpgrad
     A: {
       id: 'A',
       title: 'HEAVIER MARK',
-      role: 'Wiederholte Treffer skalieren besser',
+      role: 'Repeated hits scale better',
       levels: [
-        { cost: 70, summary: '+4% Mark-Bonus', bonus: { guiltMarkAdd: 0.04 } },
-        { cost: 100, summary: '+4% Mark-Bonus, +8% Schaden', bonus: { guiltMarkAdd: 0.04, damageMul: 1.08 } }
+        { cost: 76, summary: '+4% Mark bonus', bonus: { guiltMarkAdd: 0.04 } },
+        { cost: 118, summary: '+4% Mark, +8% Damage', bonus: { guiltMarkAdd: 0.04, damageMul: 1.08 } }
       ]
     },
     B: {
       id: 'B',
       title: 'CONFESSION',
-      role: 'Execute etwas frueher',
+      role: 'Earlier execute',
       levels: [
-        { cost: 75, summary: '+3% Execute-Schwelle', bonus: { guiltExecuteThresholdAdd: 0.03 } },
-        { cost: 105, summary: '+3% Execute, +14 Range', bonus: { guiltExecuteThresholdAdd: 0.03, rangeAdd: 14 } }
+        { cost: 78, summary: '+3% Execute threshold', bonus: { guiltExecuteThresholdAdd: 0.03 } },
+        { cost: 120, summary: '+3% Execute, +14 Range', bonus: { guiltExecuteThresholdAdd: 0.03, rangeAdd: 14 } }
       ]
     },
     C: {
       id: 'C',
       title: 'RELENTLESS LOOP',
-      role: 'Mehr Tempo fuer Markierungen',
+      role: 'More tempo for marks',
       levels: [
-        { cost: 70, summary: '+12% Tempo', bonus: { fireRateMul: 0.88 } },
-        { cost: 100, summary: '+10% Tempo, +8% Projektil', bonus: { fireRateMul: 0.90, projectileSpeedMul: 1.08 } }
+        { cost: 74, summary: '+12% Tempo', bonus: { fireRateMul: 0.88 } },
+        { cost: 116, summary: '+10% Tempo, +8% Projectile', bonus: { fireRateMul: 0.90, projectileSpeedMul: 1.08 } }
       ]
     }
   },
@@ -319,28 +326,115 @@ export const TOWER_UPGRADES: Record<EmotionType, Record<UpgradePath, TowerUpgrad
     A: {
       id: 'A',
       title: 'WIDER GUARD',
-      role: 'Mehr Reichweite und Barriere',
+      role: 'More range and barrier',
       levels: [
-        { cost: 60, summary: '+18 Range, +0.15 Shield', bonus: { rangeAdd: 18, coreShieldAdd: 0.15 } },
-        { cost: 90, summary: '+22 Range, +0.15 Shield', bonus: { rangeAdd: 22, coreShieldAdd: 0.15 } }
+        { cost: 58, summary: '+18 Range, +0.15 Shield', bonus: { rangeAdd: 18, coreShieldAdd: 0.15 } },
+        { cost: 98, summary: '+22 Range, +0.15 Shield', bonus: { rangeAdd: 22, coreShieldAdd: 0.15 } }
       ]
     },
     B: {
       id: 'B',
       title: 'ANCHOR FIELD',
-      role: 'Besser gegen Panic und Void',
+      role: 'Better vs Panic and Void',
       levels: [
-        { cost: 65, summary: '+0.35s Anchor', bonus: { trustAnchorDurationAdd: 0.35 } },
-        { cost: 95, summary: '+0.35s Anchor, schneller', bonus: { trustAnchorDurationAdd: 0.35, fireRateMul: 0.92 } }
+        { cost: 62, summary: '+0.35s Anchor', bonus: { trustAnchorDurationAdd: 0.35 } },
+        { cost: 104, summary: '+0.35s Anchor, faster', bonus: { trustAnchorDurationAdd: 0.35, fireRateMul: 0.92 } }
       ]
     },
     C: {
       id: 'C',
       title: 'CORE VOW',
-      role: 'Defensive Spezialisierung',
+      role: 'Defensive specialization',
       levels: [
-        { cost: 70, summary: '+35% Shield, -10% Schaden', bonus: { coreShieldMul: 1.35, damageMul: 0.90 } },
-        { cost: 100, summary: '+30% Shield, +1 Stability', bonus: { coreShieldMul: 1.30, stabilityOnWaveCompleteAdd: 1 } }
+        { cost: 66, summary: '+35% Shield, -10% Damage', bonus: { coreShieldMul: 1.35, damageMul: 0.90 } },
+        { cost: 108, summary: '+30% Shield, +1 Stability', bonus: { coreShieldMul: 1.30, stabilityOnWaveCompleteAdd: 1 } }
+      ]
+    }
+  },
+  [EmotionType.Shame]: {
+    A: {
+      id: 'A',
+      title: 'WIDER STARE',
+      role: 'Larger group vulnerability radius',
+      levels: [
+        { cost: 70, summary: '+18 Group radius', bonus: { shameGroupRadiusAdd: 18, damageMul: 1.06 } },
+        { cost: 112, summary: '+22 Group radius', bonus: { shameGroupRadiusAdd: 22, damageMul: 1.08 } }
+      ]
+    },
+    B: {
+      id: 'B',
+      title: 'EXPOSED CROWD',
+      role: 'Harder group damage debuff',
+      levels: [
+        { cost: 74, summary: '+18% Group damage', bonus: { shameGroupDamageMul: 1.18 } },
+        { cost: 118, summary: '+16% Group damage', bonus: { shameGroupDamageMul: 1.16, fireRateMul: 0.94 } }
+      ]
+    },
+    C: {
+      id: 'C',
+      title: 'PUBLIC FRACTURE',
+      role: 'Small splash pressure',
+      levels: [
+        { cost: 78, summary: '+22 Splash, +8% Damage', bonus: { splashRadiusAdd: 22, damageMul: 1.08 } },
+        { cost: 122, summary: '+20 Splash, faster', bonus: { splashRadiusAdd: 20, fireRateMul: 0.90 } }
+      ]
+    }
+  },
+  [EmotionType.Love]: {
+    A: {
+      id: 'A',
+      title: 'LONGER THREAD',
+      role: 'Links farther',
+      levels: [
+        { cost: 74, summary: '+28 Link radius', bonus: { loveLinkRadiusAdd: 28, rangeAdd: 12 } },
+        { cost: 116, summary: '+34 Link radius', bonus: { loveLinkRadiusAdd: 34, rangeAdd: 14 } }
+      ]
+    },
+    B: {
+      id: 'B',
+      title: 'WARMER TEMPO',
+      role: 'Stronger link fire-rate buff',
+      levels: [
+        { cost: 78, summary: 'Better link tempo', bonus: { loveFireRateMul: 0.92 } },
+        { cost: 122, summary: 'Even better tempo', bonus: { loveFireRateMul: 0.92, loveLinkRadiusAdd: 10 } }
+      ]
+    },
+    C: {
+      id: 'C',
+      title: 'DEVOTED PAIR',
+      role: 'Stronger link damage buff',
+      levels: [
+        { cost: 82, summary: '+12% Link damage', bonus: { loveDamageMul: 1.12 } },
+        { cost: 126, summary: '+10% Link damage, faster', bonus: { loveDamageMul: 1.10, fireRateMul: 0.92 } }
+      ]
+    }
+  },
+  [EmotionType.Pride]: {
+    A: {
+      id: 'A',
+      title: 'SHARPER AIM',
+      role: 'More boss and single-target damage',
+      levels: [
+        { cost: 86, summary: '+18% Damage, +25% Boss', bonus: { damageMul: 1.18, bossDamageMul: 1.25 } },
+        { cost: 132, summary: '+18% Damage, +25% Boss', bonus: { damageMul: 1.18, bossDamageMul: 1.25 } }
+      ]
+    },
+    B: {
+      id: 'B',
+      title: 'STAND ALONE',
+      role: 'Better isolated damage',
+      levels: [
+        { cost: 84, summary: '+18% Isolated damage', bonus: { prideIsolationDamageMul: 1.18 } },
+        { cost: 128, summary: '+18% Isolated, tighter', bonus: { prideIsolationDamageMul: 1.18, prideIsolationRadiusMul: 0.88 } }
+      ]
+    },
+    C: {
+      id: 'C',
+      title: 'CLEAN SHOT',
+      role: 'Range and projectile speed',
+      levels: [
+        { cost: 80, summary: '+22 Range, +12% Projectile', bonus: { rangeAdd: 22, projectileSpeedMul: 1.12 } },
+        { cost: 124, summary: '+24 Range, faster', bonus: { rangeAdd: 24, fireRateMul: 0.9 } }
       ]
     }
   }

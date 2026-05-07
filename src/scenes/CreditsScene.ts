@@ -2,7 +2,7 @@ import { Application, Container, Graphics } from 'pixi.js';
 import { audioManager } from '../core/AudioManager';
 import type { Scene } from '../core/Scene';
 import type { SceneManager } from '../core/SceneManager';
-import { CANVAS, COLORS } from '../game/config';
+import { CANVAS, COLORS, CREDITS_COPY } from '../game/config';
 import { makeHeadline, makeLabel, makeText } from '../ui/text';
 import { MainMenuScene } from './MainMenuScene';
 
@@ -23,7 +23,7 @@ export class CreditsScene implements Scene {
       .fill({ color: COLORS.panel, alpha: 0.96 })
       .stroke({ color: 0xb070ff, width: 2, alpha: 0.85 });
 
-    const title = makeText('CREDITS', {
+    const title = makeText(CREDITS_COPY.title, {
       fontSize: 38,
       fontWeight: '900',
       letterSpacing: 5,
@@ -32,14 +32,7 @@ export class CreditsScene implements Scene {
     title.anchor.set(0.5);
     title.position.set(CANVAS.width / 2, 175);
 
-    const lines = [
-      'EMOTICORE TD',
-      'Design, code and emotional systems PROTOTYPE.',
-      'Built with TypeScript, Vite and PixiJS.',
-      'Designed by Dominik Fers with support of AI Agents (Claude and Codex)',
-      'Not perfect, but its not trying to be ;)',
-      '\n'
-    ];
+    const lines = CREDITS_COPY.lines;
 
     this.root.addChild(bg, title);
 
@@ -68,7 +61,7 @@ export class CreditsScene implements Scene {
   private createBackButton(): Container {
     const button = new Container();
     const frame = new Graphics();
-    const label = makeLabel('BACK', { fontSize: 13, letterSpacing: 3, fill: COLORS.text });
+    const label = makeLabel(CREDITS_COPY.back, { fontSize: 13, letterSpacing: 3, fill: COLORS.text });
     const draw = (hovered: boolean): void => {
       frame.clear();
       frame.roundRect(-70, -24, 140, 48, 8)

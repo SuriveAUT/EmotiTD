@@ -13,16 +13,18 @@ export interface EnemyStats {
 }
 
 export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
-  [EnemyKind.Doubtling]:   { hp:  30, speed:  88, bounty:  6, damage: 1, radius: 11, label: 'Doubtling' },
-  [EnemyKind.PanicRunner]: { hp:  40, speed: 148, bounty:  9, damage: 1, radius: 10, label: 'Panic Runner' },
-  [EnemyKind.GuiltGiant]:  { hp: 260, speed:  38, bounty: 30, damage: 3, radius: 22, label: 'Guilt Giant' },
-  [EnemyKind.ShameSwarm]:  { hp:  22, speed:  78, bounty:  4, damage: 1, radius:  9, label: 'Shame Swarm' },
-  [EnemyKind.EnvyLeech]:   { hp:  58, speed:  92, bounty: 13, damage: 1, radius: 12, label: 'Envy Leech' },
-  [EnemyKind.BurnoutBrute]:{ hp: 360, speed:  34, bounty: 36, damage: 3, radius: 24, label: 'Burnout Brute' },
-  [EnemyKind.VoidWraith]:  { hp:  68, speed: 112, bounty: 16, damage: 2, radius: 13, label: 'Void Wraith' },
-  [EnemyKind.Overthinker]: { hp: 150, speed:  58, bounty: 24, damage: 2, radius: 18, label: 'Overthinker' },
-  [EnemyKind.NumbOne]:     { hp: 125, speed:  66, bounty: 18, damage: 2, radius: 15, label: 'Numb One' },
-  [EnemyKind.Spiral]:      { hp: 1800,speed:  34, bounty: 200,damage: 5, radius: 38, label: 'The Spiral' }
+  [EnemyKind.Doubtling]:   { hp:  30, speed:  88, bounty:  7, damage: 1, radius: 11, label: 'Doubtling' },
+  [EnemyKind.PanicRunner]: { hp:  40, speed: 148, bounty: 10, damage: 1, radius: 10, label: 'Panic Runner' },
+  [EnemyKind.GuiltGiant]:  { hp: 250, speed:  38, bounty: 31, damage: 3, radius: 22, label: 'Guilt Giant' },
+  [EnemyKind.ShameSwarm]:  { hp:  22, speed:  78, bounty:  5, damage: 1, radius:  9, label: 'Shame Swarm' },
+  [EnemyKind.EnvyLeech]:   { hp:  56, speed:  92, bounty: 14, damage: 1, radius: 12, label: 'Envy Leech' },
+  [EnemyKind.BurnoutBrute]:{ hp: 340, speed:  34, bounty: 38, damage: 3, radius: 24, label: 'Burnout Brute' },
+  [EnemyKind.VoidWraith]:  { hp:  66, speed: 112, bounty: 17, damage: 2, radius: 13, label: 'Void Wraith' },
+  [EnemyKind.Overthinker]: { hp: 145, speed:  58, bounty: 25, damage: 2, radius: 18, label: 'Overthinker' },
+  [EnemyKind.NumbOne]:     { hp: 120, speed:  66, bounty: 19, damage: 2, radius: 15, label: 'Numb One' },
+  [EnemyKind.Spiral]:      { hp: 1700,speed:  34, bounty: 230,damage: 5, radius: 38, label: 'The Spiral' },
+  [EnemyKind.Mask]:        { hp: 1850,speed:  38, bounty: 260,damage: 5, radius: 37, label: 'The Mask' },
+  [EnemyKind.BurnoutBoss]: { hp: 2100,speed:  30, bounty: 290,damage: 6, radius: 40, label: 'The Burnout' }
 };
 
 export const ENEMY_TRAITS: Record<EnemyKind, string[]> = {
@@ -65,5 +67,13 @@ export const ENEMY_TRAITS: Record<EnemyKind, string[]> = {
   [EnemyKind.Spiral]: [
     'Boss: periodically disrupts emotional balance.',
     'Spawns Doubtlings while alive.'
+  ],
+  [EnemyKind.Mask]: [
+    'Boss: temporarily resists your top damage emotion.',
+    'Forces mixed damage and flexible targeting.'
+  ],
+  [EnemyKind.BurnoutBoss]: [
+    'Boss: creates Overheat zones around towers.',
+    'Overheated towers fire more slowly until the zone fades.'
   ]
 };

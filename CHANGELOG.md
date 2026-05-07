@@ -1,31 +1,37 @@
 # Changelog
 
-Alle nennenswerten Änderungen an EMOTICORE TD werden hier festgehalten. Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung an [SemVer](https://semver.org/lang/de/).
+All notable changes to EMOTICORE TD are documented here. Format follows Keep a Changelog, versioning follows SemVer.
 
-## [0.1.0-alpha] — 2026-05-06
+## [0.1.0-alpha] - 2026-05-07
 
-Erster spielbarer Stand. MVP der Kernschleife steht.
+First playable alpha. The core loop is ready for release validation.
 
 ### Added
 
-- Kernschleife: Wellen-Setup, Bauphase, Active Wave, Sieg- und Niederlage-Bedingung.
-- **Neun Emotionsturm-Typen** mit eigenen Mechaniken: Anger (Splash), Sadness (Slow), Joy (Chain), Fear (Stun), Calm (Buff-Aura), Hope (Numb-Damage-Multiplier), Disgust (Poison + Armor-Shred), Guilt (Mark + Execute), Trust (Core-Shield + Anchor).
-- Synergie-System (Resonanz) zwischen passenden Emotionen.
-- Upgrade-Pfade A / B / C pro Turm.
-- Targeting-Modi: First, Last, Strongest, Weakest, Fastest, Boss.
-- **Zehn Gegner-Typen**: Doubtling, Panic Runner, Guilt Giant, Shame Swarm, Envy Leech, Burnout Brute, Void Wraith, Overthinker, Numb One und der Boss „The Spiral".
-- WaveManager mit eskalierenden Wellen und Boss-Encounter.
-- Emotional Balance / RunStats-Tracking pro Lauf.
-- Partikel-Effekte und Pixi-Filter für Glow / Atmosphäre.
-- **Zwei Maps**: *Fractured Mind* und *Silent Lake*.
-- Szenen: Main Menu, Game, Settings, How To Play, Credits.
-- HUD, Side Panel, Tower Bar.
-- Interaktives Tutorial inklusive statischer How-To-Play-Übersicht.
-- AudioManager mit Master-/SFX-/Music-Kanälen, Settings persistent über SaveManager (LocalStorage).
-- Keyboard-Controls: `1`–`9` Auswahl, `Space` Welle starten, `P` Pause, `F` Speed-Toggle, `Esc` Cancel, `R` Restart.
-- Responsive Canvas-Fit mit atmosphärischem Frame-Hintergrund.
+- Core loop: wave setup, build phase, active wave, victory and defeat conditions.
+- Nine emotion tower types with distinct mechanics: Anger (splash), Sadness (slow), Joy (chain), Fear (stun), Calm (buff aura), Hope (Numb damage multiplier), Disgust (poison and armor shred), Guilt (mark and execute), Trust (core shield and anchor).
+- Resonance synergy system between matching emotions.
+- Upgrade paths A / B / C per tower.
+- Targeting modes: First, Last, Strongest, Weakest, Fastest, Boss.
+- Ten enemy types: Doubtling, Panic Runner, Guilt Giant, Shame Swarm, Envy Leech, Burnout Brute, Void Wraith, Overthinker, Numb One and boss The Spiral.
+- WaveManager with escalating waves and boss encounters.
+- Standard mode victory after Wave 30.
+- Endless continuation after standard victory.
+- Emotional Balance and RunStats tracking per run.
+- Particle effects and Pixi filters for glow and atmosphere.
+- Two maps: Fractured Mind and Silent Lake.
+- Scenes: Main Menu, Game, Settings, How To Play, Credits.
+- HUD, Side Panel and Tower Bar.
+- Interactive tutorial and static How To Play overview.
+- How To Play Tower Roles reference covering all nine towers.
+- AudioManager with master, SFX and music channels.
+- Persistent settings, tutorial state, best wave and best score via SaveManager LocalStorage.
+- Boss intro overlay and defeat window with run summary.
+- Keyboard controls: `1`-`9` selection, `Space` wave start, `P` pause, `F` speed toggle, `Esc` cancel, `R` restart.
+- Responsive canvas fit with atmospheric frame background.
+- Release preparation docs: `RELEASE_CHECKLIST.md` and `KNOWN_ISSUES.md`.
 
 ### Build
 
-- Vite-Produktionsbuild ohne Sourcemaps.
-- `npm run typecheck` als separater Schritt sowie als Pre-Step von `npm run build`.
+- Vite production build without sourcemaps.
+- `npm run typecheck` as a separate step and as a pre-step of `npm run build`.

@@ -1,7 +1,7 @@
 {
   "name": "emoticore-td",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.0-alpha",
   "type": "module",
   "description": "EMOTICORE TD — emotional tower defense in WebGL",
   "scripts": {

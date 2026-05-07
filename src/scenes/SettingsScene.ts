@@ -3,7 +3,7 @@ import { audioManager } from '../core/AudioManager';
 import type { Scene } from '../core/Scene';
 import type { SceneManager } from '../core/SceneManager';
 import { saveManager, type QualitySetting, type SaveData, type SaveManager } from '../core/SaveManager';
-import { CANVAS, COLORS } from '../game/config';
+import { CANVAS, COLORS, SETTINGS_COPY } from '../game/config';
 import { makeLabel, makeText } from '../ui/text';
 import { MainMenuScene } from './MainMenuScene';
 
@@ -29,7 +29,7 @@ export class SettingsScene implements Scene {
     this.data = this.saves.load();
     this.drawPanel();
 
-    const title = makeText('SETTINGS', {
+    const title = makeText(SETTINGS_COPY.title, {
       fontSize: 38,
       fontWeight: '900',
       letterSpacing: 5,
@@ -42,21 +42,21 @@ export class SettingsScene implements Scene {
     this.bestValue.anchor.set(0.5);
     this.bestValue.position.set(CANVAS.width / 2, 235);
 
-    const muted = this.createSettingButton('MUTED', 285, () => {
+    const muted = this.createSettingButton(SETTINGS_COPY.muted, 285, () => {
       this.data = this.saves.updateSettings({ muted: !this.data.settings.muted });
       audioManager.applySettings(this.data.settings);
       this.refreshValues();
     });
     this.mutedValue = muted.value;
 
-    const screenShake = this.createSettingButton('SCREEN SHAKE', 365, () => {
+    const screenShake = this.createSettingButton(SETTINGS_COPY.screenShake, 365, () => {
       this.data = this.saves.updateSettings({ screenShake: !this.data.settings.screenShake });
       audioManager.applySettings(this.data.settings);
       this.refreshValues();
     });
     this.screenShakeValue = screenShake.value;
 
-    const quality = this.createSettingButton('QUALITY', 445, () => {
+    const quality = this.createSettingButton(SETTINGS_COPY.quality, 445, () => {
       this.data = this.saves.updateSettings({ quality: this.nextQuality(this.data.settings.quality) });
       audioManager.applySettings(this.data.settings);
       this.refreshValues();
@@ -89,7 +89,7 @@ export class SettingsScene implements Scene {
   private createBackButton(): Container {
     const button = new Container();
     const frame = new Graphics();
-    const label = makeLabel('BACK', { fontSize: 13, letterSpacing: 3, fill: COLORS.text });
+    const label = makeLabel(SETTINGS_COPY.back, { fontSize: 13, letterSpacing: 3, fill: COLORS.text });
     const draw = (hovered: boolean): void => {
       frame.clear();
       frame.roundRect(-70, -24, 140, 48, 8)
@@ -144,7 +144,7 @@ export class SettingsScene implements Scene {
 
   private refreshValues(): void {
     if (!this.bestValue || !this.mutedValue || !this.screenShakeValue || !this.qualityValue) return;
-    this.bestValue.text = `BEST WAVE ${this.data.bestWave}  /  BEST SCORE ${this.data.bestScore}`;
+    this.bestValue.text = SETTINGS_COPY.best(this.data.bestWave, this.data.bestScore);
     this.mutedValue.text = this.data.settings.muted ? 'ON' : 'OFF';
     this.screenShakeValue.text = this.data.settings.screenShake ? 'ON' : 'OFF';
     this.qualityValue.text = this.data.settings.quality.toUpperCase();

@@ -22,7 +22,10 @@ export enum EmotionType {
   Hope = 'hope',
   Disgust = 'disgust',
   Guilt = 'guilt_tower',
-  Trust = 'trust'
+  Trust = 'trust',
+  Shame = 'shame_tower',
+  Love = 'love',
+  Pride = 'pride'
 }
 
 export const EMOTION_TYPES: EmotionType[] = [
@@ -34,7 +37,10 @@ export const EMOTION_TYPES: EmotionType[] = [
   EmotionType.Hope,
   EmotionType.Disgust,
   EmotionType.Guilt,
-  EmotionType.Trust
+  EmotionType.Trust,
+  EmotionType.Shame,
+  EmotionType.Love,
+  EmotionType.Pride
 ];
 
 export enum EnemyKind {
@@ -47,7 +53,19 @@ export enum EnemyKind {
   VoidWraith = 'void',
   Overthinker = 'overthinker',
   NumbOne = 'numb',
-  Spiral = 'spiral'
+  Spiral = 'spiral',
+  Mask = 'mask',
+  BurnoutBoss = 'burnout_boss'
+}
+
+export const BOSS_KINDS: EnemyKind[] = [
+  EnemyKind.Spiral,
+  EnemyKind.Mask,
+  EnemyKind.BurnoutBoss
+];
+
+export function isBossKind(kind: EnemyKind): boolean {
+  return kind === EnemyKind.Spiral || kind === EnemyKind.Mask || kind === EnemyKind.BurnoutBoss;
 }
 
 export interface DamagePacket {
@@ -77,4 +95,7 @@ export interface DamagePacket {
   coreShield?: number;
   /** Trust suppression for Panic/Void special movement */
   trustAnchorDuration?: number;
+  /** Shame bonus when the target is packed inside a group */
+  shameGroupRadius?: number;
+  shameGroupDamageMul?: number;
 }

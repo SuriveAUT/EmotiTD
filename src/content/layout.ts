@@ -51,7 +51,10 @@ export const EMOTION_COLOR: Record<EmotionType, number> = {
   [EmotionType.Hope]: 0xf7f3a6,
   [EmotionType.Disgust]: 0x8ee05f,
   [EmotionType.Guilt]: 0xc0a06a,
-  [EmotionType.Trust]: 0x5fd4ff
+  [EmotionType.Trust]: 0x5fd4ff,
+  [EmotionType.Shame]: 0xff77b7,
+  [EmotionType.Love]: 0xff6fae,
+  [EmotionType.Pride]: 0xffb84d
 };
 
 export const EMOTION_ACCENT: Record<EmotionType, number> = {
@@ -63,17 +66,8 @@ export const EMOTION_ACCENT: Record<EmotionType, number> = {
   [EmotionType.Hope]: 0x6cf0ff,
   [EmotionType.Disgust]: 0xd6ff77,
   [EmotionType.Guilt]: 0xffd166,
-  [EmotionType.Trust]: 0xffffff
-};
-
-export const EMOTION_LABEL: Record<EmotionType, string> = {
-  [EmotionType.Anger]: 'WUT',
-  [EmotionType.Sadness]: 'TRAUER',
-  [EmotionType.Joy]: 'FREUDE',
-  [EmotionType.Fear]: 'ANGST',
-  [EmotionType.Calm]: 'RUHE',
-  [EmotionType.Hope]: 'HOFFNUNG',
-  [EmotionType.Disgust]: 'EKEL',
-  [EmotionType.Guilt]: 'SCHULD',
-  [EmotionType.Trust]: 'VERTRAUEN'
+  [EmotionType.Trust]: 0xffffff,
+  [EmotionType.Shame]: 0xb070ff,
+  [EmotionType.Love]: 0xffffff,
+  [EmotionType.Pride]: 0xfff0a8
 };

@@ -21,6 +21,11 @@ export interface SynergyModifiers {
   guiltExecuteThresholdAdd?: number;
   coreShieldMul?: number;
   trustAnchorDurationAdd?: number;
+  shameGroupDamageMul?: number;
+  shameGroupRadiusAdd?: number;
+  loveDamageMul?: number;
+  loveFireRateMul?: number;
+  prideIsolationDamageMul?: number;
 }
 
 export interface SynergyDef {
@@ -162,6 +167,66 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     modifiers: {
       [EmotionType.Trust]: { trustAnchorDurationAdd: 0.25 },
       [EmotionType.Joy]: { chainRangeAdd: 18 }
+    }
+  },
+  {
+    id: 'shame-fear',
+    label: 'SOCIAL DREAD',
+    emotions: [EmotionType.Shame, EmotionType.Fear],
+    description: 'Shame exposes groups harder while Fear holds them in place.',
+    modifiers: {
+      [EmotionType.Shame]: { shameGroupDamageMul: 1.12 },
+      [EmotionType.Fear]: { stunDurationAdd: 0.08 }
+    }
+  },
+  {
+    id: 'shame-disgust',
+    label: 'SOUR SPOTLIGHT',
+    emotions: [EmotionType.Shame, EmotionType.Disgust],
+    description: 'Grouped targets take stronger Shame pressure and longer poison.',
+    modifiers: {
+      [EmotionType.Shame]: { shameGroupRadiusAdd: 14 },
+      [EmotionType.Disgust]: { poisonDpsMul: 1.08 }
+    }
+  },
+  {
+    id: 'love-joy',
+    label: 'BRIGHT BOND',
+    emotions: [EmotionType.Love, EmotionType.Joy],
+    description: 'Love links add damage and Joy chains reach farther.',
+    modifiers: {
+      [EmotionType.Love]: { loveDamageMul: 1.08 },
+      [EmotionType.Joy]: { chainRangeAdd: 16 }
+    }
+  },
+  {
+    id: 'love-trust',
+    label: 'SECURE BOND',
+    emotions: [EmotionType.Love, EmotionType.Trust],
+    description: 'Love links pulse faster and Trust shields harder.',
+    modifiers: {
+      [EmotionType.Love]: { loveFireRateMul: 0.94 },
+      [EmotionType.Trust]: { coreShieldMul: 1.10 }
+    }
+  },
+  {
+    id: 'pride-guilt',
+    label: 'PROVING POINT',
+    emotions: [EmotionType.Pride, EmotionType.Guilt],
+    description: 'Pride gets more isolated damage while Guilt marks hit harder.',
+    modifiers: {
+      [EmotionType.Pride]: { prideIsolationDamageMul: 1.12 },
+      [EmotionType.Guilt]: { guiltMarkAdd: 0.02 }
+    }
+  },
+  {
+    id: 'pride-love',
+    label: 'SELF WORTH',
+    emotions: [EmotionType.Pride, EmotionType.Love],
+    description: 'Pride boss shots and Love links both strengthen.',
+    modifiers: {
+      [EmotionType.Pride]: { prideIsolationDamageMul: 1.08 },
+      [EmotionType.Love]: { loveDamageMul: 1.06 }
     }
   }
 ];

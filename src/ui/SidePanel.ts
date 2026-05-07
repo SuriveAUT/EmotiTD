@@ -9,6 +9,7 @@ import {
   UPGRADE_PATHS,
   ENEMY_STATS,
   ENEMY_TRAITS,
+  SIDE_PANEL_COPY,
   type SynergyDef,
   type TowerStats
 } from '../game/config';
@@ -111,11 +112,11 @@ export class SidePanel {
     head.position.set(x, y); this.body.addChild(head);
     y += 32;
 
-    const sub = makeLabel('PLATZIERUNGSMODUS');
+    const sub = makeLabel(SIDE_PANEL_COPY.placementMode);
     sub.position.set(x, y); this.body.addChild(sub);
     y += 20;
 
-    const help = makeText(affordable ? 'Klicke ein Feld zum Bauen.\nESC oder Rechtsklick = abbrechen.' : 'Nicht genug MEMORY.', {
+    const help = makeText(affordable ? SIDE_PANEL_COPY.placementHelp : SIDE_PANEL_COPY.notEnoughMemory, {
       fontSize: 12, fill: affordable ? 0xc0c8d8 : 0xff5577, lineHeight: 16
     });
     help.position.set(x, y); this.body.addChild(help);
@@ -133,11 +134,11 @@ export class SidePanel {
     const x = PANEL_X + 18;
     let y = PANEL_Y + 22;
 
-    const head = makeHeadline(EMOTION_LABEL[t.type] + ' - TURM', { fontSize: 18, fill: c, letterSpacing: 3 });
+    const head = makeHeadline(`${EMOTION_LABEL[t.type]} - ${SIDE_PANEL_COPY.selectedTowerSuffix}`, { fontSize: 18, fill: c, letterSpacing: 3 });
     head.position.set(x, y); this.body.addChild(head);
     y += 28;
 
-    const sub = makeLabel('AUSGEWÄHLT');
+    const sub = makeLabel(SIDE_PANEL_COPY.selected);
     sub.position.set(x, y); this.body.addChild(sub);
     y += 20;
 
@@ -161,13 +162,13 @@ export class SidePanel {
     const x = PANEL_X + 18;
     let y = PANEL_Y + 22;
 
-    const head = makeHeadline(between ? 'NÄCHSTE WELLE' : 'AKTUELLE WELLE', { fontSize: 16, fill: 0x6cf0ff, letterSpacing: 4 });
+    const head = makeHeadline(between ? SIDE_PANEL_COPY.nextWave : SIDE_PANEL_COPY.currentWave, { fontSize: 16, fill: 0x6cf0ff, letterSpacing: 4 });
     head.position.set(x, y); this.body.addChild(head);
     y += 28;
 
     const def = between ? next : current;
     if (!def) {
-      const t = makeText('Kein Wave-Daten', { fontSize: 12, fill: 0x7d8ba6 });
+      const t = makeText(SIDE_PANEL_COPY.noWaveData, { fontSize: 12, fill: 0x7d8ba6 });
       t.position.set(x, y); this.body.addChild(t);
       this.finalizeLayout(y + 20);
       return;
@@ -184,7 +185,12 @@ export class SidePanel {
       warnBg.roundRect(x, y, PANEL_W - 36, 44, 7)
         .fill({ color: 0x2a1018, alpha: 0.9 })
         .stroke({ color: 0xff5577, width: 1.5, alpha: 0.9 });
-      const warn = makeText('BOSS WARNING\nSpiral disruption affects all towers.', {
+      const bossKind = def.groups.find(group => group.kind === EnemyKind.Spiral || group.kind === EnemyKind.Mask || group.kind === EnemyKind.BurnoutBoss)?.kind;
+      const bossText =
+        bossKind === EnemyKind.Mask ? 'The Mask resists your top damage emotion.' :
+        bossKind === EnemyKind.BurnoutBoss ? 'The Burnout creates tower-slowing Overheat zones.' :
+        'The Spiral disrupts emotional balance.';
+      const warn = makeText(`BOSS WARNING\n${bossText}`, {
         fontSize: 11, fill: 0xffd166, fontWeight: '700', lineHeight: 16
       });
       warn.position.set(x + 10, y + 6);
@@ -193,7 +199,7 @@ export class SidePanel {
     }
 
     const composition = aggregateComposition(def);
-    const lbl = makeLabel('GEGNER');
+    const lbl = makeLabel(SIDE_PANEL_COPY.enemies);
     lbl.position.set(x, y); this.body.addChild(lbl); y += 20;
 
     for (const [kind, count] of composition) {
@@ -202,7 +208,7 @@ export class SidePanel {
 
     if (def.bonusMemory) {
       y += 8;
-      const bonus = makeText(`+${def.bonusMemory} BONUS bei Abschluss`, { fontSize: 12, fill: 0xffd166 });
+      const bonus = makeText(SIDE_PANEL_COPY.bonusOnClear(def.bonusMemory), { fontSize: 12, fill: 0xffd166 });
       bonus.position.set(x, y); this.body.addChild(bonus);
       y += 26;
     }
@@ -214,10 +220,10 @@ export class SidePanel {
     this.clear();
     const x = PANEL_X + 18;
     let y = PANEL_Y + 60;
-    const t1 = makeHeadline('SIEG', { fontSize: 36, fill: 0x77ffaa, letterSpacing: 8 });
+    const t1 = makeHeadline(SIDE_PANEL_COPY.victoryTitle, { fontSize: 36, fill: 0x77ffaa, letterSpacing: 8 });
     t1.position.set(x, y); this.body.addChild(t1);
     y += 56;
-    const t2 = makeText('Du hast den Core verteidigt.\nF5 für eine neue Runde.', { fontSize: 13, fill: 0xc0c8d8, lineHeight: 20 });
+    const t2 = makeText(SIDE_PANEL_COPY.victoryBody, { fontSize: 13, fill: 0xc0c8d8, lineHeight: 20 });
     t2.position.set(x, y); this.body.addChild(t2);
     y += 56;
     if (summary) {
@@ -232,10 +238,10 @@ export class SidePanel {
     this.clear();
     const x = PANEL_X + 18;
     let y = PANEL_Y + 60;
-    const t1 = makeHeadline('CORE GEBROCHEN', { fontSize: 24, fill: 0xff5577, letterSpacing: 4 });
+    const t1 = makeHeadline(SIDE_PANEL_COPY.defeatTitle, { fontSize: 24, fill: 0xff5577, letterSpacing: 4 });
     t1.position.set(x, y); this.body.addChild(t1);
     y += 50;
-    const t2 = makeText(`Die Stille hat dich erreicht.\nErreichte Wave: ${wave}\nRestart für einen neuen Versuch.`, { fontSize: 13, fill: 0xc0c8d8, lineHeight: 20 });
+    const t2 = makeText(SIDE_PANEL_COPY.defeatBody(wave), { fontSize: 13, fill: 0xc0c8d8, lineHeight: 20 });
     t2.position.set(x, y); this.body.addChild(t2);
     y += (t2.height as number) + 14;
     if (summary) {
@@ -264,22 +270,25 @@ export class SidePanel {
 
   private appendStats(x: number, y: number, type: EmotionType, stats: TowerStats = TOWER_STATS[type]): number {
     const rows: [string, string][] = [];
-    rows.push(['KOSTEN', `${TOWER_STATS[type].cost}`]);
-    rows.push(['SCHADEN', `${Math.round(stats.damage)}`]);
-    rows.push(['REICHWEITE', `${Math.round(stats.range)}`]);
-    rows.push(['FEUERRATE', `${stats.fireRate.toFixed(2)}s`]);
+    rows.push([SIDE_PANEL_COPY.statCost, `${TOWER_STATS[type].cost}`]);
+    rows.push([SIDE_PANEL_COPY.statDamage, `${Math.round(stats.damage)}`]);
+    rows.push([SIDE_PANEL_COPY.statRange, `${Math.round(stats.range)}`]);
+    rows.push([SIDE_PANEL_COPY.statFireRate, `${stats.fireRate.toFixed(2)}s`]);
     if (stats.splashRadius) rows.push(['SPLASH', `${Math.round(stats.splashRadius)}`]);
     if (stats.chainCount)   rows.push(['CHAIN', `${stats.chainCount}`]);
     if (stats.slowAmount)   rows.push(['SLOW', `${Math.round((1 - stats.slowAmount) * 100)}% / ${stats.slowDuration}s`]);
     if (stats.fearChance)   rows.push(['STUN', `${Math.round(stats.fearChance * 100)}% / ${stats.stunDuration}s`]);
-    if (stats.buffRadius)   rows.push(['BUFF', `+${Math.round((1 - (stats.buffFireRate ?? 1)) * 100)}% Tempo`]);
+    if (stats.buffRadius)   rows.push(['BUFF', `+${Math.round((1 - (stats.buffFireRate ?? 1)) * 100)}% ${SIDE_PANEL_COPY.statTempo}`]);
     if (stats.numbDamageMul) rows.push(['NUMB', `x${stats.numbDamageMul.toFixed(2)}`]);
-    if (stats.poisonDps) rows.push(['GIFT', `${stats.poisonDps.toFixed(1)}/s / ${stats.poisonDuration}s`]);
+    if (stats.poisonDps) rows.push([SIDE_PANEL_COPY.statPoison, `${stats.poisonDps.toFixed(1)}/s / ${stats.poisonDuration}s`]);
     if (stats.armorShred) rows.push(['SHRED', `x${stats.armorShred.toFixed(2)} / ${stats.armorShredDuration}s`]);
     if (stats.guiltMark) rows.push(['MARK', `+${Math.round(stats.guiltMark * 100)}% / hit`]);
     if (stats.guiltExecuteThreshold) rows.push(['EXECUTE', `${Math.round(stats.guiltExecuteThreshold * 100)}% HP`]);
     if (stats.coreShield) rows.push(['SHIELD', `+${stats.coreShield.toFixed(2)} Core`]);
     if (stats.trustAnchorDuration) rows.push(['ANCHOR', `${stats.trustAnchorDuration.toFixed(2)}s`]);
+    if (stats.shameGroupDamageMul) rows.push(['GROUP', `x${stats.shameGroupDamageMul.toFixed(2)} / ${stats.shameGroupRadius}`]);
+    if (stats.loveLinkRadius) rows.push(['LINK', `${stats.loveLinkRadius} / x${stats.loveDamageMul?.toFixed(2) ?? '1.00'}`]);
+    if (stats.prideIsolationDamageMul) rows.push(['ISOLATED', `x${stats.prideIsolationDamageMul.toFixed(2)}`]);
 
     for (const [k, v] of rows) {
       const kt = makeLabel(k);
@@ -294,7 +303,7 @@ export class SidePanel {
   }
 
   private appendSynergy(x: number, y: number, synergies: EmotionType[]): number {
-    const lbl = makeLabel('SYNERGIE');
+    const lbl = makeLabel(SIDE_PANEL_COPY.synergy);
     lbl.position.set(x, y); this.body.addChild(lbl);
     y += 18;
     let dx = x;
@@ -314,13 +323,13 @@ export class SidePanel {
   }
 
   private appendActiveSynergies(x: number, y: number): number {
-    const label = makeLabel('AKTIVE SYNERGIEN');
+    const label = makeLabel(SIDE_PANEL_COPY.activeSynergies);
     label.position.set(x, y);
     this.body.addChild(label);
     y += 18;
 
     if (this.activeSynergies.length === 0) {
-      const empty = makeText('Keine aktiven Paare.', { fontSize: 11, fill: 0x7d8ba6 });
+      const empty = makeText(SIDE_PANEL_COPY.noActivePairs, { fontSize: 11, fill: 0x7d8ba6 });
       empty.position.set(x, y);
       this.body.addChild(empty);
       return y + 22;
@@ -344,7 +353,7 @@ export class SidePanel {
   }
 
   private appendUpgrades(x: number, y: number, tower: Tower, memory: number): number {
-    const label = makeLabel('UPGRADES');
+    const label = makeLabel(SIDE_PANEL_COPY.upgrades);
     label.position.set(x, y);
     this.body.addChild(label);
     y += 20;
@@ -357,7 +366,7 @@ export class SidePanel {
   }
 
   private appendTargetingControls(x: number, y: number, tower: Tower): number {
-    const label = makeLabel('TARGETING');
+    const label = makeLabel(SIDE_PANEL_COPY.targeting);
     label.position.set(x, y);
     this.body.addChild(label);
     y += 20;
@@ -406,7 +415,7 @@ export class SidePanel {
     const refund = tower.sellValue();
     const btn = new Container();
     const bg = new Graphics();
-    const text = makeText(`SELL  +${refund} MEMORY`, {
+    const text = makeText(SIDE_PANEL_COPY.sellMemory(refund), {
       fontSize: 12,
       fontWeight: '800',
       letterSpacing: 2,
@@ -478,9 +487,9 @@ export class SidePanel {
 
     const levelText = `${active ? state.level : 0}/2`;
     const subText =
-      locked ? 'LOCKED BY OTHER PATH' :
-      maxed ? `LEVEL ${levelText}  -  MAX` :
-      `LEVEL ${levelText}  -  ${nextCost} MEMORY`;
+      locked ? SIDE_PANEL_COPY.lockedByOtherPath :
+      maxed ? SIDE_PANEL_COPY.levelMax(levelText) :
+      SIDE_PANEL_COPY.levelCost(levelText, nextCost ?? 0);
     const sub = makeText(subText, {
       fontSize: 10,
       fontWeight: '700',
@@ -518,7 +527,9 @@ export class SidePanel {
       [EnemyKind.VoidWraith]: 0xb070ff,
       [EnemyKind.Overthinker]: 0x6cf0ff,
       [EnemyKind.NumbOne]: 0x8c95a8,
-      [EnemyKind.Spiral]: 0xff5577
+      [EnemyKind.Spiral]: 0xff5577,
+      [EnemyKind.Mask]: 0xff77ff,
+      [EnemyKind.BurnoutBoss]: 0xff5b3a
     };
     dot.circle(0, 0, 7).fill({ color: colors[kind], alpha: 0.9 });
     dot.position.set(x + 7, y + 9);

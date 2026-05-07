@@ -5,6 +5,10 @@ import { PathSampler, dist, clamp } from './math';
 
 const PATH_HALF_WIDTH = 22;
 
+function randSign(seed: number): number {
+  return seed % 2 === 0 ? 1 : -1;
+}
+
 interface DecorRipple {
   x: number;
   y: number;
@@ -36,6 +40,40 @@ interface DecorHex {
   phase: number;
 }
 
+interface DecorCrack {
+  points: Vec2[];
+  color: number;
+  alpha: number;
+}
+
+interface DecorNeuralLine {
+  a: Vec2;
+  b: Vec2;
+  phase: number;
+}
+
+interface DecorNode {
+  x: number;
+  y: number;
+  radius: number;
+  phase: number;
+}
+
+interface DecorFogBand {
+  y: number;
+  width: number;
+  speed: number;
+  phase: number;
+  alpha: number;
+}
+
+interface DecorReflection {
+  x: number;
+  y: number;
+  width: number;
+  phase: number;
+}
+
 export class GameMap {
   readonly container: Container;
   readonly path: PathSampler;
@@ -59,6 +97,11 @@ export class GameMap {
   private lilyPads: DecorLilyPad[] = [];
   private glitchLines: DecorGlitchLine[] = [];
   private hexes: DecorHex[] = [];
+  private cracks: DecorCrack[] = [];
+  private neuralLines: DecorNeuralLine[] = [];
+  private unstableNodes: DecorNode[] = [];
+  private fogBands: DecorFogBand[] = [];
+  private reflections: DecorReflection[] = [];
 
   /** Cells that are blocked because a tower is on them (cell key "cx,cy") */
   private occupied = new Set<string>();
@@ -127,6 +170,19 @@ export class GameMap {
         this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 100 + t * 100, FIELD.width, 18)
           .fill({ color: 0x040814, alpha: 0.06 + t * 0.06 });
       }
+    } else if (this.definition.style === 'panic') {
+      // panic: magenta/purple alarm bars top + bottom, deep purple haze
+      for (let i = 0; i < 6; i++) {
+        const t = i / 5;
+        this.bg.rect(FIELD.x, FIELD.y + t * 60, FIELD.width, 60)
+          .fill({ color: 0xff77ff, alpha: 0.018 * (1 - t) });
+        this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 60 + t * 60, FIELD.width, 12)
+          .fill({ color: 0xb070ff, alpha: 0.025 + t * 0.015 });
+      }
+      this.bg.rect(FIELD.x, FIELD.y, FIELD.width, 3)
+        .fill({ color: 0xff77ff, alpha: 0.18 });
+      this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 3, FIELD.width, 3)
+        .fill({ color: 0xff77ff, alpha: 0.18 });
     } else {
       // fractured: subtle radial darkening near the edges
       this.bg.rect(FIELD.x, FIELD.y, FIELD.width, 4)
@@ -219,6 +275,25 @@ export class GameMap {
           phase: i * 1.3
         });
       }
+      for (let i = 0; i < 8; i++) {
+        const point = this.findOpenSpot(42);
+        if (!point) continue;
+        this.reflections.push({
+          x: point.x,
+          y: point.y,
+          width: 32 + (i % 4) * 18,
+          phase: i * 0.9
+        });
+      }
+      for (let i = 0; i < 5; i++) {
+        this.fogBands.push({
+          y: FIELD.y + 70 + i * 88,
+          width: 220 + i * 34,
+          speed: 18 + i * 5,
+          phase: i * 91,
+          alpha: 0.045 + i * 0.006
+        });
+      }
     } else {
       // glitch streak lines + decorative hex accents
       for (let i = 0; i < 5; i++) {
@@ -240,6 +315,40 @@ export class GameMap {
           phase: i * 0.55
         });
       }
+      for (let i = 0; i < 13; i++) {
+        const start = this.findOpenSpot(34);
+        if (!start) continue;
+        const points: Vec2[] = [start];
+        const segments = 2 + (i % 3);
+        let x = start.x;
+        let y = start.y;
+        for (let s = 0; s < segments; s++) {
+          x += randSign(i + s) * (28 + ((i + s) % 3) * 16);
+          y += randSign(i * 3 + s) * (16 + ((i + s) % 4) * 10);
+          points.push({ x: clamp(x, FIELD.x + 20, FIELD.x + FIELD.width - 20), y: clamp(y, FIELD.y + 20, FIELD.y + FIELD.height - 20) });
+        }
+        this.cracks.push({
+          points,
+          color: i % 2 === 0 ? 0xff5577 : 0x6cf0ff,
+          alpha: 0.18 + (i % 3) * 0.04
+        });
+      }
+      for (let i = 0; i < 14; i++) {
+        const a = this.findOpenSpot(44);
+        const b = this.findOpenSpot(44);
+        if (!a || !b) continue;
+        this.neuralLines.push({ a, b, phase: i * 0.47 });
+      }
+      for (let i = 0; i < 11; i++) {
+        const point = this.findOpenSpot(36);
+        if (!point) continue;
+        this.unstableNodes.push({
+          x: point.x,
+          y: point.y,
+          radius: 3 + (i % 3) * 1.8,
+          phase: i * 0.73
+        });
+      }
     }
   }
 
@@ -259,6 +368,14 @@ export class GameMap {
     g.clear();
 
     if (this.definition.style === 'silent') {
+      for (const reflection of this.reflections) {
+        g.moveTo(reflection.x - reflection.width / 2, reflection.y)
+          .lineTo(reflection.x + reflection.width / 2, reflection.y)
+          .stroke({ color: 0x9bdcff, width: 1.2, alpha: 0.13 });
+        g.moveTo(reflection.x - reflection.width * 0.35, reflection.y + 8)
+          .lineTo(reflection.x + reflection.width * 0.35, reflection.y + 8)
+          .stroke({ color: 0x6cf0d9, width: 1, alpha: 0.1 });
+      }
       for (const pad of this.lilyPads) {
         // lily pad — soft layered disc
         g.circle(pad.x, pad.y, pad.radius + 6).fill({ color: pad.hue, alpha: 0.04 });
@@ -267,10 +384,28 @@ export class GameMap {
         g.circle(pad.x, pad.y, pad.radius * 0.45).fill({ color: 0x9bdcff, alpha: 0.5 });
       }
     } else {
+      for (const crack of this.cracks) {
+        if (crack.points.length < 2) continue;
+        g.moveTo(crack.points[0].x, crack.points[0].y);
+        for (let i = 1; i < crack.points.length; i++) {
+          g.lineTo(crack.points[i].x, crack.points[i].y);
+        }
+        g.stroke({ color: crack.color, width: 1.4, alpha: crack.alpha });
+        const tip = crack.points[crack.points.length - 1];
+        g.circle(tip.x, tip.y, 2).fill({ color: crack.color, alpha: crack.alpha + 0.08 });
+      }
+      for (const line of this.neuralLines) {
+        g.moveTo(line.a.x, line.a.y).lineTo(line.b.x, line.b.y)
+          .stroke({ color: 0x6cf0ff, width: 1, alpha: 0.08 });
+      }
       for (const hex of this.hexes) {
         g.regularPoly(hex.x, hex.y, hex.radius + 6, 6, 0).stroke({ color: 0x6cf0ff, width: 1, alpha: 0.16 });
         g.regularPoly(hex.x, hex.y, hex.radius, 6, 0).stroke({ color: 0xff5577, width: 1, alpha: 0.22 });
         g.circle(hex.x, hex.y, 1.8).fill({ color: 0x6cf0ff, alpha: 0.7 });
+      }
+      for (const node of this.unstableNodes) {
+        g.circle(node.x, node.y, node.radius + 5).stroke({ color: 0xff5577, width: 1, alpha: 0.12 });
+        g.circle(node.x, node.y, node.radius).fill({ color: 0x6cf0ff, alpha: 0.35 });
       }
     }
   }
@@ -281,6 +416,11 @@ export class GameMap {
     const t = this.decorTime;
 
     if (this.definition.style === 'silent') {
+      for (const band of this.fogBands) {
+        const x = FIELD.x + ((t * band.speed + band.phase) % (FIELD.width + band.width)) - band.width;
+        g.ellipse(x + band.width / 2, band.y, band.width / 2, 20).fill({ color: 0x9bdcff, alpha: band.alpha });
+        g.ellipse(x + band.width * 0.74, band.y + 12, band.width / 3, 14).fill({ color: 0x6cf0d9, alpha: band.alpha * 0.55 });
+      }
       // expanding water rings
       for (const r of this.ripples) {
         const cycle = (t * r.speed + r.phase) % 1;
@@ -296,6 +436,12 @@ export class GameMap {
         g.circle(pad.x + Math.cos(pad.phase) * 1.2, pad.y - 3 - bob * 4, pad.radius * 0.18)
           .fill({ color: 0xffffff, alpha: 0.3 + bob * 0.4 });
       }
+      for (const reflection of this.reflections) {
+        const shimmer = 0.5 + Math.sin(t * 1.4 + reflection.phase) * 0.5;
+        g.moveTo(reflection.x - reflection.width * 0.28, reflection.y - 5)
+          .lineTo(reflection.x + reflection.width * 0.28, reflection.y - 5)
+          .stroke({ color: 0xffffff, width: 1, alpha: 0.08 + shimmer * 0.08 });
+      }
     } else {
       // horizontal glitch streaks
       for (const line of this.glitchLines) {
@@ -308,6 +454,17 @@ export class GameMap {
       for (const hex of this.hexes) {
         const pulse = 0.5 + Math.sin(t * 2 + hex.phase) * 0.5;
         g.circle(hex.x, hex.y, 0.8 + pulse * 1.6).fill({ color: 0xff5577, alpha: 0.5 + pulse * 0.3 });
+      }
+      for (const node of this.unstableNodes) {
+        const pulse = 0.5 + Math.sin(t * 3.5 + node.phase) * 0.5;
+        g.circle(node.x, node.y, node.radius + pulse * 8).stroke({ color: 0xff5577, width: 1, alpha: 0.08 + pulse * 0.22 });
+        g.circle(node.x, node.y, node.radius * 0.65 + pulse * 1.5).fill({ color: 0x6cf0ff, alpha: 0.18 + pulse * 0.28 });
+      }
+      for (const line of this.neuralLines) {
+        const pulse = 0.5 + Math.sin(t * 2.1 + line.phase) * 0.5;
+        if (pulse < 0.72) continue;
+        g.moveTo(line.a.x, line.a.y).lineTo(line.b.x, line.b.y)
+          .stroke({ color: 0x6cf0ff, width: 1, alpha: (pulse - 0.72) * 0.45 });
       }
     }
   }

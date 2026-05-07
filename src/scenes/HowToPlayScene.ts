@@ -2,10 +2,33 @@ import { Application, Container, Graphics } from 'pixi.js';
 import { audioManager } from '../core/AudioManager';
 import type { Scene } from '../core/Scene';
 import type { SceneManager } from '../core/SceneManager';
-import { CANVAS, COLORS } from '../game/config';
+import { CANVAS, COLORS, EMOTION_LABEL, HOW_TO_PLAY_COPY, TOWER_STATS } from '../game/config';
 import { TUTORIAL_STATIC_GUIDE } from '../game/TutorialManager';
+import { EMOTION_TYPES, type EmotionType } from '../game/types';
 import { makeLabel, makeText } from '../ui/text';
 import { MainMenuScene } from './MainMenuScene';
+
+const TOWER_GUIDE: Array<{ type: EmotionType; role: string }> = EMOTION_TYPES.map((type) => ({
+  type,
+  role: TOWER_STATS[type].description
+}));
+
+/* ------------------------------------------------------------------ *
+ *  HowToPlay layout (panel 220..1060, content 240..1040)
+ *  Three columns: RUN LOOP | TOWER ROLES | BOSS ROTATION
+ * ------------------------------------------------------------------ */
+const PANEL_X = 220;
+const PANEL_W = 840;
+const PANEL_Y = 70;
+const PANEL_H = 620;
+const COL_HEAD_Y = 188;
+const COL_BODY_Y = 220;
+const COL_LOOP_X = 246;
+const COL_LOOP_W = 250;
+const COL_TOWER_X = 510;
+const COL_TOWER_W = 250;
+const COL_BOSS_X = 780;
+const COL_BOSS_W = 260;
 
 export class HowToPlayScene implements Scene {
   private readonly app: Application;
@@ -20,7 +43,7 @@ export class HowToPlayScene implements Scene {
   init(): void {
     this.drawPanel();
 
-    const title = makeText('HOW TO PLAY', {
+    const title = makeText(HOW_TO_PLAY_COPY.title, {
       fontSize: 36,
       fontWeight: '900',
       letterSpacing: 5,
@@ -30,7 +53,7 @@ export class HowToPlayScene implements Scene {
     title.position.set(CANVAS.width / 2, 108);
     this.root.addChild(title);
 
-    const intro = makeLabel('Build, balance, upgrade, survive.', {
+    const intro = makeLabel(HOW_TO_PLAY_COPY.intro, {
       fontSize: 12,
       letterSpacing: 3,
       fill: COLORS.textDim
@@ -39,37 +62,9 @@ export class HowToPlayScene implements Scene {
     intro.position.set(CANVAS.width / 2, 150);
     this.root.addChild(intro);
 
-    TUTORIAL_STATIC_GUIDE.forEach((item, index) => {
-      const column = index < 5 ? 0 : 1;
-      const row = index % 5;
-      const x = column === 0 ? 300 : 665;
-      const y = 205 + row * 78;
-
-      const number = makeLabel(`${index + 1}`.padStart(2, '0'), {
-        fontSize: 10,
-        letterSpacing: 2,
-        fill: COLORS.warn
-      });
-      number.position.set(x, y);
-
-      const heading = makeLabel(item.title.toUpperCase(), {
-        fontSize: 11,
-        letterSpacing: 2,
-        fill: COLORS.text
-      });
-      heading.position.set(x + 36, y);
-
-      const body = makeText(item.body, {
-        fontSize: 11,
-        fill: COLORS.textDim,
-        wordWrap: true,
-        wordWrapWidth: 285,
-        lineHeight: 15
-      });
-      body.position.set(x + 36, y + 18);
-
-      this.root.addChild(number, heading, body);
-    });
+    this.drawRunLoopColumn();
+    this.drawTowerColumn();
+    this.drawBossColumn();
 
     this.root.addChild(this.createBackButton());
     this.app.stage.addChild(this.root);
@@ -87,17 +82,111 @@ export class HowToPlayScene implements Scene {
   private drawPanel(): void {
     const bg = new Graphics();
     bg.rect(0, 0, CANVAS.width, CANVAS.height).fill({ color: COLORS.bg });
-    bg.roundRect(220, 70, 840, 620, 8)
+    bg.roundRect(PANEL_X, PANEL_Y, PANEL_W, PANEL_H, 8)
       .fill({ color: COLORS.panel, alpha: 0.96 })
       .stroke({ color: COLORS.pathCore, width: 2, alpha: 0.8 });
-    bg.rect(640, 190, 1, 410).fill({ color: COLORS.panelEdge, alpha: 0.9 });
+    bg.rect(COL_TOWER_X - 14, 190, 1, 410).fill({ color: COLORS.panelEdge, alpha: 0.9 });
+    bg.rect(COL_BOSS_X - 14, 190, 1, 410).fill({ color: COLORS.panelEdge, alpha: 0.9 });
     this.root.addChild(bg);
+  }
+
+  private drawRunLoopColumn(): void {
+    const heading = makeLabel(HOW_TO_PLAY_COPY.runLoop, { fontSize: 10, letterSpacing: 3, fill: COLORS.warn });
+    heading.position.set(COL_LOOP_X, COL_HEAD_Y);
+    this.root.addChild(heading);
+
+    TUTORIAL_STATIC_GUIDE.forEach((item, index) => {
+      const x = COL_LOOP_X;
+      const y = COL_BODY_Y + index * 44;
+
+      const number = makeLabel(`${index + 1}`.padStart(2, '0'), {
+        fontSize: 9,
+        letterSpacing: 2,
+        fill: COLORS.warn
+      });
+      number.position.set(x, y);
+
+      const heading = makeLabel(item.title.toUpperCase(), {
+        fontSize: 9,
+        letterSpacing: 1,
+        fill: COLORS.text
+      });
+      heading.position.set(x + 26, y);
+
+      const body = makeText(item.body, {
+        fontSize: 9,
+        fill: COLORS.textDim,
+        wordWrap: true,
+        wordWrapWidth: COL_LOOP_W - 30,
+        lineHeight: 12
+      });
+      body.position.set(x + 26, y + 14);
+
+      this.root.addChild(number, heading, body);
+    });
+  }
+
+  private drawTowerColumn(): void {
+    const heading = makeLabel(HOW_TO_PLAY_COPY.towerRoles, { fontSize: 10, letterSpacing: 3, fill: COLORS.warn });
+    heading.position.set(COL_TOWER_X, COL_HEAD_Y);
+    this.root.addChild(heading);
+
+    TOWER_GUIDE.forEach((item, index) => {
+      const col = index % 2;
+      const row = Math.floor(index / 2);
+      const x = COL_TOWER_X + col * (COL_TOWER_W / 2);
+      const y = COL_BODY_Y + row * 64;
+      const name = makeLabel(EMOTION_LABEL[item.type], {
+        fontSize: 10,
+        letterSpacing: 1,
+        fill: COLORS.text
+      });
+      name.position.set(x, y);
+
+      const body = makeText(item.role, {
+        fontSize: 9,
+        fill: COLORS.textDim,
+        wordWrap: true,
+        wordWrapWidth: COL_TOWER_W / 2 - 6,
+        lineHeight: 12
+      });
+      body.position.set(x, y + 14);
+      this.root.addChild(name, body);
+    });
+  }
+
+  private drawBossColumn(): void {
+    const heading = makeLabel(HOW_TO_PLAY_COPY.bossPrimer, { fontSize: 10, letterSpacing: 3, fill: COLORS.warn });
+    heading.position.set(COL_BOSS_X, COL_HEAD_Y);
+    this.root.addChild(heading);
+
+    HOW_TO_PLAY_COPY.bosses.forEach((boss, index) => {
+      const x = COL_BOSS_X;
+      const y = COL_BODY_Y + index * 90;
+
+      const name = makeLabel(boss.name, {
+        fontSize: 10,
+        letterSpacing: 1,
+        fill: 0xff5577
+      });
+      name.position.set(x, y);
+
+      const body = makeText(boss.body, {
+        fontSize: 10,
+        fill: COLORS.textDim,
+        wordWrap: true,
+        wordWrapWidth: COL_BOSS_W - 10,
+        lineHeight: 14
+      });
+      body.position.set(x, y + 16);
+      this.root.addChild(name, body);
+    });
   }
 
   private createBackButton(): Container {
     const button = new Container();
     const frame = new Graphics();
-    const label = makeLabel('BACK', { fontSize: 13, letterSpacing: 3, fill: COLORS.text });
+    const label = makeLabel(HOW_TO_PLAY_COPY.back, { fontSize: 13, letterSpacing: 3, fill: COLORS.text });
     const draw = (hovered: boolean): void => {
       frame.clear();
       frame.roundRect(-70, -24, 140, 48, 8)

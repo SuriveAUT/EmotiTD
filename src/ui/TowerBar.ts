@@ -1,6 +1,6 @@
 import { Container, FederatedPointerEvent, Graphics, Text } from 'pixi.js';
 import { audioManager } from '../core/AudioManager';
-import { CANVAS, COLORS, EMOTION_COLOR, EMOTION_LABEL, TOWER_STATS } from '../game/config';
+import { CANVAS, COLORS, EMOTION_COLOR, TOWER_BAR_COPY, TOWER_STATS } from '../game/config';
 import { EMOTION_TYPES, EmotionType } from '../game/types';
 import { makeLabel, makeText } from './text';
 
@@ -13,9 +13,24 @@ export interface TowerBarCallbacks {
   onRestart(): void;
 }
 
-const BUTTON_W = 66;
+const BUTTON_W = 50;
 const BUTTON_H = 72;
-const BUTTON_GAP = 6;
+const BUTTON_GAP = 4;
+
+const TOWER_BUTTON_LABEL: Record<EmotionType, string> = {
+  [EmotionType.Anger]: 'ANGER',
+  [EmotionType.Sadness]: 'SAD',
+  [EmotionType.Joy]: 'JOY',
+  [EmotionType.Fear]: 'FEAR',
+  [EmotionType.Calm]: 'CALM',
+  [EmotionType.Hope]: 'HOPE',
+  [EmotionType.Disgust]: 'DISG',
+  [EmotionType.Guilt]: 'GUILT',
+  [EmotionType.Trust]: 'TRUST',
+  [EmotionType.Shame]: 'SHAME',
+  [EmotionType.Love]: 'LOVE',
+  [EmotionType.Pride]: 'PRIDE'
+};
 
 class TowerButton {
   readonly container: Container;
@@ -36,13 +51,13 @@ class TowerButton {
     this.container.addChild(this.bg, this.icon);
 
     const stats = TOWER_STATS[type];
-    const label = makeText(EMOTION_LABEL[type], { fontSize: 9, fontWeight: '700', letterSpacing: 0, fill: 0xe8edf2 });
-    label.position.set(6, 8);
-    const cost = makeText(`${stats.cost}`, { fontSize: 16, fontWeight: '700', fill: 0xffd166 });
+    const label = makeText(TOWER_BUTTON_LABEL[type], { fontSize: 8, fontWeight: '700', letterSpacing: 0, fill: 0xe8edf2 });
+    label.position.set(4, 8);
+    const cost = makeText(`${stats.cost}`, { fontSize: 14, fontWeight: '700', fill: 0xffd166 });
     cost.anchor.set(1, 0);
-    cost.position.set(BUTTON_W - 6, 23);
-    const sub = makeLabel(this.subFor(type), { fontSize: 8, letterSpacing: 0 });
-    sub.position.set(6, BUTTON_H - 15);
+    cost.position.set(BUTTON_W - 4, 23);
+    const sub = makeLabel(TOWER_BAR_COPY.subLabel[type], { fontSize: 7, letterSpacing: 0 });
+    sub.position.set(4, BUTTON_H - 15);
     this.container.addChild(label, cost, sub);
 
     this.draw();
@@ -55,20 +70,6 @@ class TowerButton {
       audioManager.playSfx('ui-click');
       onClick();
     });
-  }
-
-  private subFor(t: EmotionType): string {
-    switch (t) {
-      case EmotionType.Anger:   return 'SPLASH';
-      case EmotionType.Sadness: return 'RANGE / SLOW';
-      case EmotionType.Joy:     return 'CHAIN';
-      case EmotionType.Fear:    return 'STUN';
-      case EmotionType.Calm:    return 'SUPPORT';
-      case EmotionType.Hope:    return 'ANTI-NUMB';
-      case EmotionType.Disgust: return 'POISON';
-      case EmotionType.Guilt:   return 'MARK';
-      case EmotionType.Trust:   return 'SHIELD';
-    }
   }
 
   setSelected(s: boolean) { this.selected = s; this.draw(); }
@@ -185,11 +186,11 @@ export class TowerBar {
     }
 
     /* control buttons — sit between tower bar and start button */
-    this.pauseControl = new ControlButton(60, 'PAUSE', () => this.callbacks.onPauseToggle());
+    this.pauseControl = new ControlButton(60, TOWER_BAR_COPY.pause, () => this.callbacks.onPauseToggle());
     this.speedControl = new ControlButton(44, '1X', () => this.callbacks.onSpeedToggle());
-    this.autoControl = new ControlButton(64, 'AUTO ON', () => this.callbacks.onAutoStartToggle());
-    this.restartControl = new ControlButton(64, 'RESTART', () => this.callbacks.onRestart());
-    const cx = 670;
+    this.autoControl = new ControlButton(64, TOWER_BAR_COPY.autoOn, () => this.callbacks.onAutoStartToggle());
+    this.restartControl = new ControlButton(64, TOWER_BAR_COPY.restart, () => this.callbacks.onRestart());
+    const cx = 674;
     this.pauseControl.container.position.set(cx, y + 6);
     this.speedControl.container.position.set(cx + 66, y + 6);
     this.autoControl.container.position.set(cx, y + 40);
@@ -207,16 +208,16 @@ export class TowerBar {
     this.startBtn.cursor = 'pointer';
     this.startBg = new Graphics();
     this.startBtn.addChild(this.startBg);
-    const label = makeText('▶  START WAVE', { fontSize: 14, fontWeight: '700', letterSpacing: 3, fill: 0x05070d });
+    const label = makeText(`>  ${TOWER_BAR_COPY.startWave}`, { fontSize: 14, fontWeight: '700', letterSpacing: 3, fill: 0x05070d });
     label.anchor.set(0.5);
     label.position.set(86, 22);
     this.startBtn.addChild(label);
-    const sub = makeText('SPACE', { fontSize: 9, fontWeight: '700', letterSpacing: 4, fill: 0x05070d });
+    const sub = makeText(TOWER_BAR_COPY.startKey, { fontSize: 9, fontWeight: '700', letterSpacing: 4, fill: 0x05070d });
     sub.anchor.set(0.5);
     sub.position.set(86, 44);
     sub.alpha = 0.7;
     this.startBtn.addChild(sub);
-    this.startBtn.position.set(CANVAS.width - CANVAS.rightPanelWidth - 180, y);
+    this.startBtn.position.set(CANVAS.width - CANVAS.rightPanelWidth - 176, y);
     this.drawStartBg(false);
     this.startBtn.on('pointerover', () => this.drawStartBg(true));
     this.startBtn.on('pointerout',  () => this.drawStartBg(false));
@@ -255,10 +256,10 @@ export class TowerBar {
     autoStartEnabled: boolean;
     canRestart: boolean;
   }) {
-    this.pauseControl.set(state.paused ? 'RESUME' : 'PAUSE', true, state.paused);
+    this.pauseControl.set(state.paused ? TOWER_BAR_COPY.resume : TOWER_BAR_COPY.pause, true, state.paused);
     this.speedControl.set(`${state.speedMultiplier}X`, true, state.speedMultiplier > 1);
-    this.autoControl.set(state.autoStartEnabled ? 'AUTO ON' : 'AUTO OFF', true, state.autoStartEnabled);
-    this.restartControl.set('RESTART', state.canRestart, false);
+    this.autoControl.set(state.autoStartEnabled ? TOWER_BAR_COPY.autoOn : TOWER_BAR_COPY.autoOff, true, state.autoStartEnabled);
+    this.restartControl.set(TOWER_BAR_COPY.restart, state.canRestart, false);
   }
 
   setSelected(t: EmotionType | null) {

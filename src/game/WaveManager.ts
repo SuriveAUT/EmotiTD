@@ -31,43 +31,74 @@ const V = EnemyKind.VoidWraith;
 const O = EnemyKind.Overthinker;
 const N = EnemyKind.NumbOne;
 const X = EnemyKind.Spiral;
+const M = EnemyKind.Mask;
+const R = EnemyKind.BurnoutBoss;
 
 const previewCache = new Map<number, WaveDef>();
+
+function hpScaleFor(number: number): number {
+  const tier = Math.max(0, number - 1);
+  if (number <= 5) return 1 + tier * 0.035;
+  if (number <= 10) return 1.14 + (number - 5) * 0.045;
+  if (number <= 20) return 1.36 + (number - 10) * 0.055;
+  return 1.91 + (number - 20) * 0.065;
+}
+
+function spacingDensityFor(number: number): number {
+  const tier = Math.max(0, number - 1);
+  if (number <= 5) return 1.04 - tier * 0.025;
+  if (number <= 10) return 0.92 - (number - 6) * 0.018;
+  if (number <= 20) return 0.82 - (number - 11) * 0.014;
+  return Math.max(0.42, 0.68 - (number - 21) * 0.018);
+}
+
+function bossHpScaleFor(number: number): number {
+  const base = 0.72 + number * 0.038;
+  return number >= 30 ? base + 0.65 : base;
+}
+
+export function bossKindForWave(number: number): EnemyKind {
+  if (number <= 10) return X;
+  if (number <= 20) return M;
+  if (number <= 30) return R;
+  const cycle = Math.floor(number / 10 - 1) % 3;
+  return cycle === 0 ? X : cycle === 1 ? M : R;
+}
 
 export function generateWave(number: number): WaveDef {
   const cached = previewCache.get(number);
   if (cached) return cached;
 
-  const tier = Math.max(0, number - 1);
-  const hpScale = 1 + tier * 0.055 + Math.floor(number / 10) * 0.08;
-  const density = Math.max(0.18, 0.82 - tier * 0.018);
+  const hpScale = hpScaleFor(number);
+  const density = spacingDensityFor(number);
   const bossWave = number % 10 === 0;
   const groups: SpawnGroup[] = [];
 
   if (bossWave) {
+    const bossKind = bossKindForWave(number);
     groups.push(
-      { kind: D, count: 8 + Math.floor(number * 0.55), spacing: Math.max(0.28, density * 0.72), delay: 0, hpScale: hpScale * 0.9 },
-      { kind: X, count: 1, spacing: 1, delay: 4, hpScale: 0.85 + number * 0.045 },
-      { kind: S, count: 10 + Math.floor(number * 0.45), spacing: Math.max(0.14, density * 0.32), delay: 10, hpScale: hpScale * 0.75 }
+      { kind: D, count: 6 + Math.floor(number * 0.45), spacing: Math.max(0.32, density * 0.78), delay: 0, hpScale: hpScale * 0.86 },
+      { kind: bossKind, count: 1, spacing: 1, delay: 4, hpScale: bossHpScaleFor(number) },
+      { kind: S, count: 8 + Math.floor(number * 0.36), spacing: Math.max(0.18, density * 0.38), delay: 10, hpScale: hpScale * 0.72 }
     );
-    if (number >= 20) groups.push({ kind: V, count: 2 + Math.floor(number / 20), spacing: 2.8, delay: 7, hpScale: hpScale * 0.8 });
+    if (number >= 20) groups.push({ kind: V, count: 1 + Math.floor(number / 20), spacing: 3.0, delay: 7, hpScale: hpScale * 0.78 });
     if (number >= 30) groups.push({ kind: O, count: 1 + Math.floor(number / 30), spacing: 4.2, delay: 12, hpScale: hpScale * 0.92 });
     if (number >= 30) groups.push({ kind: E, count: 2 + Math.floor(number / 18), spacing: 2.4, delay: 14, hpScale });
     if (number >= 40) groups.push({ kind: N, count: 3 + Math.floor(number / 18), spacing: 1.7, delay: 16, hpScale: hpScale * 0.88 });
   } else {
-    groups.push({ kind: D, count: 7 + Math.floor(number * 1.2), spacing: Math.max(0.28, density), delay: 0, hpScale });
+    groups.push({ kind: D, count: 5 + Math.floor(number * 1.0), spacing: Math.max(0.36, density), delay: 0, hpScale });
 
     if (number >= 3) {
-      groups.push({ kind: P, count: 2 + Math.floor(number * 0.45), spacing: Math.max(0.38, density * 0.9), delay: 3.5, hpScale: hpScale * 0.88 });
+      groups.push({ kind: P, count: 1 + Math.floor(number * 0.38), spacing: Math.max(0.46, density * 0.95), delay: 3.5, hpScale: hpScale * 0.86 });
     }
     if (number >= 5) {
       groups.push({ kind: G, count: 1 + Math.floor(number / 7), spacing: 3.2, delay: 6, hpScale });
     }
     if (number >= 7) {
-      groups.push({ kind: S, count: 8 + Math.floor(number * 0.75), spacing: Math.max(0.14, density * 0.34), delay: 8, hpScale: hpScale * 0.72 });
+      groups.push({ kind: S, count: 5 + Math.floor(number * 0.6), spacing: Math.max(0.18, density * 0.42), delay: 8, hpScale: hpScale * 0.7 });
     }
     if (number >= 6) {
-      groups.push({ kind: E, count: 2 + Math.floor(number / 8), spacing: 2.2, delay: 5.5, hpScale: hpScale * 0.9 });
+      groups.push({ kind: E, count: 1 + Math.floor(number / 9), spacing: 2.4, delay: 5.5, hpScale: hpScale * 0.88 });
     }
     if (number >= 10) {
       groups.push({ kind: B, count: 1 + Math.floor(number / 9), spacing: 3.4, delay: 9, hpScale });

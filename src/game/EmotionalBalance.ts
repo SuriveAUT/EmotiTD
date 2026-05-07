@@ -11,7 +11,10 @@ export class EmotionalBalance {
     [EmotionType.Hope]: 0,
     [EmotionType.Disgust]: 0,
     [EmotionType.Guilt]: 0,
-    [EmotionType.Trust]: 0
+    [EmotionType.Trust]: 0,
+    [EmotionType.Shame]: 0,
+    [EmotionType.Love]: 0,
+    [EmotionType.Pride]: 0
   };
 
   add(t: EmotionType) { this.counts[t]++; }
