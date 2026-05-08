@@ -2353,7 +2353,8 @@ export class Game {
       paused: this.state.paused,
       speedMultiplier: this.state.speedMultiplier,
       autoStartEnabled: this.state.autoStartEnabled,
-      canRestart: this.state.defeat || this.state.victory || this.waves.current > 0 || this.towers.length > 0
+      canRestart: this.state.defeat || this.state.victory || this.waves.current > 0 || this.towers.length > 0,
+      restartAttention: this.state.defeat
     });
   }
 }

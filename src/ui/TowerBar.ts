@@ -341,6 +341,7 @@ class ControlButton {
   private width: number;
   private enabled = true;
   private active = false;
+  private attention = false;
 
   constructor(width: number, labelText: string, onClick: () => void) {
     this.width = width;
@@ -363,10 +364,11 @@ class ControlButton {
     });
   }
 
-  set(labelText: string, enabled: boolean, active = false) {
+  set(labelText: string, enabled: boolean, active = false, attention = false) {
     this.label.text = labelText;
     this.enabled = enabled;
     this.active = active;
+    this.attention = attention;
     this.container.cursor = enabled ? 'pointer' : 'not-allowed';
     this.draw(this.width);
   }
@@ -374,13 +376,23 @@ class ControlButton {
   private draw(width: number) {
     const g = this.bg;
     g.clear();
+    const attentionPulse = this.attention && this.enabled
+      ? 0.5 + Math.sin(Date.now() / 150) * 0.5
+      : 0;
     const fill = this.active ? 0x263a34 : 0x0a0f1a;
-    const edge = this.active ? 0x77ffaa : COLORS.panelEdge;
+    const edge = this.attention ? 0xffd166 : this.active ? 0x77ffaa : COLORS.panelEdge;
+    if (attentionPulse > 0) {
+      g.roundRect(-3, -3, width + 6, 32, 8)
+        .fill({ color: 0xff3355, alpha: 0.12 + attentionPulse * 0.22 })
+        .stroke({ color: 0xffd166, width: 1.5 + attentionPulse, alpha: 0.55 + attentionPulse * 0.45 });
+    }
     g.roundRect(0, 0, width, 26, 6)
-      .fill({ color: fill, alpha: this.enabled ? 0.96 : 0.72 })
-      .stroke({ color: edge, width: 1, alpha: this.enabled ? 1 : 0.55 });
+      .fill({ color: this.attention ? 0x241020 : fill, alpha: this.enabled ? 0.96 : 0.72 })
+      .stroke({ color: edge, width: this.attention ? 1.5 + attentionPulse : 1, alpha: this.enabled ? 1 : 0.55 });
     this.label.alpha = this.enabled ? 1 : 0.45;
-    this.label.style.fill = this.active ? 0x77ffaa : 0xe8edf2;
+    this.label.style.fill = this.attention ? (attentionPulse > 0.45 ? 0xffffff : 0xffd166) : this.active ? 0x77ffaa : 0xe8edf2;
+    const scale = this.attention ? 1 + attentionPulse * 0.035 : 1;
+    this.container.scale.set(scale);
   }
 }
 
@@ -525,11 +537,12 @@ export class TowerBar {
     speedMultiplier: number;
     autoStartEnabled: boolean;
     canRestart: boolean;
+    restartAttention?: boolean;
   }) {
     this.pauseControl.set(state.paused ? TOWER_BAR_COPY.resume : TOWER_BAR_COPY.pause, true, state.paused);
     this.speedControl.set(`${state.speedMultiplier}X`, true, state.speedMultiplier > 1);
     this.autoControl.set(state.autoStartEnabled ? TOWER_BAR_COPY.autoOn : TOWER_BAR_COPY.autoOff, true, state.autoStartEnabled);
-    this.restartControl.set(TOWER_BAR_COPY.restart, state.canRestart, false);
+    this.restartControl.set(TOWER_BAR_COPY.restart, state.canRestart, false, !!state.restartAttention);
   }
 
   setSelected(t: EmotionType | null) {
