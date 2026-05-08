@@ -2,6 +2,7 @@ import { Container, FederatedPointerEvent, Graphics, Text } from 'pixi.js';
 import { audioManager } from '../core/AudioManager';
 import { CANVAS, COLORS, EMOTION_COLOR, EMOTION_LABEL, TOWER_BAR_COPY, TOWER_HELP_COPY, TOWER_STATS } from '../game/config';
 import { EMOTION_TYPES, EmotionType, TOWER_CATEGORIES, TOWER_CATEGORY_LABEL, type TowerCategory } from '../game/types';
+import { towerLore } from '../content/lore';
 import { makeLabel, makeText } from './text';
 import { UI_THEME } from './theme';
 
@@ -156,6 +157,7 @@ class TowerTooltip {
     for (const child of oldChildren) child.destroy({ children: true });
 
     const stats = TOWER_STATS[type];
+    const lore = towerLore[type];
     const color = EMOTION_COLOR[type];
     const width = 286;
     const pad = 12;
@@ -182,7 +184,7 @@ class TowerTooltip {
     y += 26;
 
     const help = TOWER_HELP_COPY[type];
-    const meta = makeText(`${TOWER_CATEGORY_LABEL[stats.category]}  /  ${help.role}`, {
+    const meta = makeText(`${TOWER_CATEGORY_LABEL[stats.category]}  /  ${help.role}\n${lore.oneLine}`, {
       fontSize: 11,
       fill: 0xc0c8d8,
       wordWrap: true,
@@ -206,9 +208,11 @@ class TowerTooltip {
     }
     y += rows.length * 17 + 8;
 
-    y = this.addSection('STRENGTHS', help.strengths.join(' / '), pad, y, textWidth, 0x77ffaa);
-    y = this.addSection('WEAKNESSES', help.weaknesses.join(' / '), pad, y, textWidth, 0xff9a7a);
+    y = this.addSection('ROLE', lore.roleLore, pad, y, textWidth, 0xc0c8d8);
+    y = this.addSection('STRENGTH', `${lore.strengthLore} ${help.strengths.join(' / ')}`, pad, y, textWidth, 0x77ffaa);
+    y = this.addSection('WEAKNESS', `${lore.weaknessLore} ${help.weaknesses.join(' / ')}`, pad, y, textWidth, 0xff9a7a);
     y = this.addSection('SYNERGIES', stats.synergies.map((emotion) => EMOTION_LABEL[emotion]).join(' / '), pad, y, textWidth, 0x6cf0ff);
+    y = this.addSection('IMBALANCE', lore.imbalanceWarning, pad, y, textWidth, 0xffd166);
     y = this.addSection('PLACEMENT', help.placement, pad, y, textWidth, 0xc0c8d8) + 2;
 
     this.bg.clear();

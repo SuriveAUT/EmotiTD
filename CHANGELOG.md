@@ -6,6 +6,13 @@ All notable changes to EMOTICORE TD are documented here. Format follows Keep a C
 
 ### Changed
 
+- Added lore integration pass connecting the Core, emotional responses, mental fractures, maps and run outcomes.
+- Added tower lore one-liners, strengths, weaknesses and imbalance warnings to tower selection panels.
+- Added a Fractures codex to How To Play with threat and counter hints.
+- Added map lore/gameplay identity copy to map selection cards.
+- Added important-wave lore messages and boss intro lore copy.
+- Added Core Report narrative blocks for victory/defeat and lore labels in run summaries.
+- Improved Emotional Balance UI language so states read as regulation, tension, imbalance and overload.
 - Compressed Endless trashmob scaling after Wave 30 so late runs lean more on elites and boss pressure instead of Doubtling mass.
 - Added stricter max simultaneous enemy caps with spawn queue backpressure instead of dropping queued spawns.
 - Reworked Emotional Balance into weighted influence by emotion/category, including Stable, Tense, Imbalanced and Overloaded states.

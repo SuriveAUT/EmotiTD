@@ -26,6 +26,7 @@ import { SynergySystem } from './SynergySystem';
 import { RunStats } from './RunStats';
 import { EconomyLog } from './EconomyLog';
 import { DevToolsOverlay, type DevToolsSnapshot } from '../debug/DevToolsOverlay';
+import { bossLore, waveLoreMessages } from '../content/lore';
 
 interface GameState {
   stability: number;
@@ -1276,6 +1277,7 @@ export class Game {
   private showBossIntro(wave: number, bossKind: EnemyKind): void {
     if (this.bossIntroOverlay) return;
     const bossInfo = BOSS_WARNING_COPY[bossKind] ?? BOSS_WARNING_COPY[EnemyKind.Spiral]!;
+    const lore = bossLore[bossKind];
     this.bossIntroWave = wave;
     this.state.bossIntroTimer = 2.45;
     this.state.autoStartIn = AUTO_START_SECONDS;
@@ -1296,7 +1298,7 @@ export class Game {
     waveText.anchor.set(0.5);
     waveText.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 - 86);
 
-    const name = makeHeadline(bossInfo.name, {
+    const name = makeHeadline(lore?.name ?? bossInfo.name, {
       fontSize: 48,
       fontWeight: '900',
       letterSpacing: 8,
@@ -1307,12 +1309,12 @@ export class Game {
     name.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 - 24);
     name.label = 'boss-intro-name';
 
-    const sub = makeText('EMOTIONAL COLLAPSE DETECTED', { fontSize: 12, fontWeight: '700', letterSpacing: 3, fill: 0x6cf0ff });
+    const sub = makeText(lore?.introLine ?? 'EMOTIONAL COLLAPSE DETECTED', { fontSize: 12, fontWeight: '700', letterSpacing: 3, fill: 0x6cf0ff });
     sub.anchor.set(0.5);
     sub.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 + 38);
     sub.label = 'boss-intro-sub';
 
-    const mechanic = makeText(bossInfo.mechanic, {
+    const mechanic = makeText(lore?.mechanicLine ?? bossInfo.mechanic, {
       fontSize: 13,
       fill: COLORS.text,
       align: 'center',
@@ -1323,7 +1325,7 @@ export class Game {
     mechanic.anchor.set(0.5);
     mechanic.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 + 76);
 
-    const counter = makeText(`Counter: ${bossInfo.counter}`, {
+    const counter = makeText(`Counter: ${lore?.counterHint ?? bossInfo.counter}`, {
       fontSize: 12,
       fontWeight: '700',
       fill: COLORS.warn,
@@ -1399,8 +1401,15 @@ export class Game {
     this.state.betweenWaves = false;
     this.state.autoStartIn = AUTO_START_SECONDS;
     if (boss) this.showStatusNotice('BOSS WAVE INCOMING', 2.5);
+    else this.showWaveLore(next);
     this.refreshSidePanel();
     this.saveCurrentRun();
+  }
+
+  private showWaveLore(wave: number): void {
+    const message = waveLoreMessages[wave];
+    if (!message) return;
+    this.showStatusNotice(message, wave >= 40 ? 3.2 : 2.6);
   }
 
   private completeWave() {
@@ -1608,9 +1617,7 @@ export class Game {
     this.showStatusNotice('Defeat - restart is available', 5);
     this.refreshUi();
     this.shake(2);
-    this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
-      color: 0xff5577, startRadius: 30, endRadius: 220, duration: 1.4, thickness: 5
-    });
+    this.playCoreCollapseAnimation();
   }
 
   private win() {
@@ -1634,6 +1641,59 @@ export class Game {
     this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
       color: 0x77ffaa, startRadius: 28, endRadius: 240, duration: 1.2, thickness: 4
     });
+  }
+
+  private playCoreCollapseAnimation(): void {
+    const x = this.map.corePos.x;
+    const y = this.map.corePos.y;
+    this.particles.burst(x, y, {
+      count: 96,
+      color: 0xff5577,
+      speedMin: 140,
+      speedMax: 520,
+      sizeMin: 2,
+      sizeMax: 5,
+      lifeMin: 0.55,
+      lifeMax: 1.45,
+      drag: 2,
+      shape: 'shard',
+      important: true
+    });
+    this.particles.burst(x, y, {
+      count: 42,
+      color: 0x6cf0ff,
+      speedMin: 80,
+      speedMax: 360,
+      sizeMin: 1.4,
+      sizeMax: 3,
+      lifeMin: 0.35,
+      lifeMax: 0.95,
+      drag: 3,
+      shape: 'spark',
+      important: true
+    });
+    for (let i = 0; i < 5; i++) {
+      this.particles.ring(x, y, {
+        color: i % 2 === 0 ? 0xff5577 : 0x6cf0ff,
+        startRadius: 18 + i * 14,
+        endRadius: 170 + i * 54,
+        duration: 0.55 + i * 0.18,
+        thickness: Math.max(1.5, 5 - i * 0.7),
+        alpha: 0.9 - i * 0.12,
+        important: true
+      });
+    }
+    for (let i = 0; i < 12; i++) {
+      const a = i * Math.PI * 2 / 12;
+      const sx = x + Math.cos(a) * 22;
+      const sy = y + Math.sin(a) * 22;
+      const ex = x + Math.cos(a) * (110 + (i % 3) * 34);
+      const ey = y + Math.sin(a) * (110 + (i % 3) * 34);
+      for (let n = 0; n < 4; n++) {
+        const t = n / 3;
+        this.particles.trail(sx + (ex - sx) * t, sy + (ey - sy) * t, i % 2 === 0 ? 0xff5577 : 0xffd166, 3.4);
+      }
+    }
   }
 
   private refreshSidePanel() {

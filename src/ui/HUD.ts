@@ -4,6 +4,7 @@ import { EMOTION_TYPES } from '../game/types';
 import type { EmotionalBalance } from '../game/EmotionalBalance';
 import { makeLabel, makeText, makeHeadline } from './text';
 import { UI_THEME, mixToward } from './theme';
+import { balanceLore } from '../content/lore';
 
 export interface HUDState {
   stability: number;
@@ -207,7 +208,11 @@ export class HUD {
 
     this.drawBalanceDots(balance);
     const balanceState = balance.analysis().state;
-    this.balanceValue.text = balance.statusText();
+    const stateLabel = balanceLore[balanceState].title;
+    const mechanical = balance.statusText().replace(/^[A-Z]+:\s?/, '');
+    this.balanceValue.text = mechanical === stateLabel || mechanical === 'NEUTRAL'
+      ? stateLabel
+      : `${stateLabel}: ${mechanical}`;
     this.balanceValue.style.fill =
       balanceState === 'overloaded' ? 0xff5577 :
       balanceState === 'imbalanced' ? 0xff8a4d :

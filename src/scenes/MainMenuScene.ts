@@ -17,6 +17,7 @@ import {
 import type { GameMode } from '../game/GameMode';
 import { makeHeadline, makeLabel, makeText } from '../ui/text';
 import { UI_THEME } from '../ui/theme';
+import { mapLore } from '../content/lore';
 import { CreditsScene } from './CreditsScene';
 import { GameScene } from './GameScene';
 import { HowToPlayScene } from './HowToPlayScene';
@@ -417,6 +418,7 @@ export class MainMenuScene implements Scene {
     const height = 86;
     const frame = new Graphics();
     const modifier = MAP_MODIFIER_COPY[map.id];
+    const lore = mapLore[map.id];
     const title = makeLabel(map.name.toUpperCase(), {
       fontSize: 13,
       letterSpacing: 2,
@@ -427,14 +429,14 @@ export class MainMenuScene implements Scene {
       letterSpacing: 2,
       fill: COLORS.textDim
     });
-    const summary = makeText(modifier?.summary ?? map.theme, {
+    const summary = makeText(lore?.shortDescription ?? modifier?.summary ?? map.theme, {
       fontSize: 9,
       fill: COLORS.text,
       wordWrap: true,
       wordWrapWidth: width - 80,
       lineHeight: 12
     });
-    const mods = makeText((modifier?.modifiers ?? []).join('  /  '), {
+    const mods = makeText(lore?.gameplayMeaning ?? (modifier?.modifiers ?? []).join('  /  '), {
       fontSize: 8,
       fontWeight: '700',
       fill: COLORS.warn,

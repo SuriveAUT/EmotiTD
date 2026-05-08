@@ -1,12 +1,12 @@
 # EMOTICORE TD
 
-Emotional Tower Defense in WebGL. Defend a fragile Core against escalating waves using emotion towers, Resonance synergies and targeted upgrades.
+EMOTICORE TD is a psychological neon tower defense game where emotional responses defend the Core from mental fractures.
 
 Stack: TypeScript, Vite, PixiJS v8.
 
 ## Alpha Status
 
-Version: `0.1.0-alpha`
+Version: `0.1.3-alpha`
 
 This is a playable alpha, not a content-complete game. It includes the full first-run loop, three maps, twelve towers, rotating bosses, a standard Wave 30 victory target, endless continuation after victory and local challenge modes. Balance, audio polish, copy consistency and long-run variety are still alpha work.
 
@@ -24,6 +24,7 @@ Included alpha features:
 - Running games are auto-saved locally and can be resumed after reload.
 - Run Summary after victory and defeat.
 - Boss intro and defeat state.
+- Lore-integrated tower tooltips, fracture codex, wave messages and Core Reports.
 
 ## Run Modes
 

@@ -3,14 +3,32 @@ import { audioManager } from '../core/AudioManager';
 import type { Scene } from '../core/Scene';
 import type { SceneManager } from '../core/SceneManager';
 import { CANVAS, COLORS, EMOTION_LABEL, HOW_TO_PLAY_COPY, TOWER_STATS } from '../game/config';
-import { EMOTION_TYPES, type EmotionType } from '../game/types';
+import { EMOTION_TYPES, EnemyKind, type EmotionType } from '../game/types';
 import { makeLabel, makeText } from '../ui/text';
+import { enemyLore, gameLore } from '../content/lore';
 import { MainMenuScene } from './MainMenuScene';
 
 const TOWER_GUIDE: Array<{ type: EmotionType; role: string }> = EMOTION_TYPES.map((type) => ({
   type,
   role: TOWER_STATS[type].description
 }));
+
+const FRACTURE_GUIDE: EnemyKind[] = [
+  EnemyKind.Doubtling,
+  EnemyKind.PanicRunner,
+  EnemyKind.Fractureling,
+  EnemyKind.PressureKnot,
+  EnemyKind.GuiltGiant,
+  EnemyKind.ShameSwarm,
+  EnemyKind.EnvyLeech,
+  EnemyKind.BurnoutBrute,
+  EnemyKind.VoidWraith,
+  EnemyKind.Overthinker,
+  EnemyKind.NumbOne,
+  EnemyKind.Spiral,
+  EnemyKind.Mask,
+  EnemyKind.BurnoutBoss
+];
 
 /* ------------------------------------------------------------------ *
  *  HowToPlay layout (panel 220..1060, content 240..1040)
@@ -63,7 +81,7 @@ export class HowToPlayScene implements Scene {
 
     this.drawRunLoopColumn();
     this.drawTowerColumn();
-    this.drawBossColumn();
+    this.drawFractureColumn();
 
     this.root.addChild(this.createBackButton());
     this.app.stage.addChild(this.root);
@@ -154,30 +172,41 @@ export class HowToPlayScene implements Scene {
     });
   }
 
-  private drawBossColumn(): void {
-    const heading = makeLabel(HOW_TO_PLAY_COPY.bossPrimer, { fontSize: 10, letterSpacing: 3, fill: COLORS.warn });
+  private drawFractureColumn(): void {
+    const heading = makeLabel('FRACTURES', { fontSize: 10, letterSpacing: 3, fill: COLORS.warn });
     heading.position.set(COL_BOSS_X, COL_HEAD_Y);
     this.root.addChild(heading);
 
-    HOW_TO_PLAY_COPY.bosses.forEach((boss, index) => {
-      const x = COL_BOSS_X;
-      const y = COL_BODY_Y + index * 90;
+    const intro = makeText(gameLore.fracturesDescription, {
+      fontSize: 8,
+      fill: COLORS.textDim,
+      wordWrap: true,
+      wordWrapWidth: COL_BOSS_W - 10,
+      lineHeight: 10
+    });
+    intro.position.set(COL_BOSS_X, COL_BODY_Y - 18);
+    this.root.addChild(intro);
 
-      const name = makeLabel(boss.name, {
-        fontSize: 10,
+    FRACTURE_GUIDE.forEach((kind, index) => {
+      const lore = enemyLore[kind];
+      const x = COL_BOSS_X;
+      const y = COL_BODY_Y + 8 + index * 28;
+
+      const name = makeLabel(lore.name.toUpperCase(), {
+        fontSize: 8,
         letterSpacing: 1,
-        fill: 0xff5577
+        fill: kind === EnemyKind.Spiral || kind === EnemyKind.Mask || kind === EnemyKind.BurnoutBoss ? 0xff5577 : COLORS.text
       });
       name.position.set(x, y);
 
-      const body = makeText(boss.body, {
-        fontSize: 10,
+      const body = makeText(`${lore.oneLine} Counter: ${lore.counterHint}`, {
+        fontSize: 8,
         fill: COLORS.textDim,
         wordWrap: true,
         wordWrapWidth: COL_BOSS_W - 10,
-        lineHeight: 14
+        lineHeight: 10
       });
-      body.position.set(x, y + 16);
+      body.position.set(x, y + 10);
       this.root.addChild(name, body);
     });
   }

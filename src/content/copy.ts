@@ -153,9 +153,9 @@ export const SIDE_PANEL_COPY = {
   enemies: 'ENEMIES',
   bonusOnClear: (amount: number) => `+${amount} CLEAR BONUS`,
   victoryTitle: 'VICTORY',
-  victoryBody: 'Core defended.\nRestart for a new run.',
+  victoryBody: 'Stabilization reached.\nThe Core survived the first fracture.',
   defeatTitle: 'CORE BROKEN',
-  defeatBody: (wave: number) => `The Core fell.\nReached Wave: ${wave}\nRestart to try again.`,
+  defeatBody: (wave: number) => `The Core collapsed.\nReached Wave: ${wave}\nRead the Core Report, then rebuild.`,
   statCost: 'COST',
   statDamage: 'DAMAGE',
   statRange: 'RANGE',
@@ -312,7 +312,7 @@ export const MAP_MODIFIER_COPY: Record<string, { summary: string; modifiers: str
 
 export const MENU_COPY = {
   title: 'EMOTICORE TD',
-  subtitle: 'Defend the Core of a breaking mind.',
+  subtitle: 'Emotional responses defending an unstable Core.',
   selectMap: 'SELECT MAP',
   startRun: 'START RUN',
   howToPlay: 'HOW TO PLAY',

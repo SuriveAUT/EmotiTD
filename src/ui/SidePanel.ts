@@ -22,6 +22,7 @@ import type { RunSummary } from '../game/RunStats';
 import type { WaveDef } from '../game/WaveManager';
 import { CHALLENGE_MODE_LABEL, type RunConfig } from '../game/RunConfig';
 import { makeLabel, makeText, makeHeadline } from './text';
+import { balanceLore, categoryLoreLabel, towerLore } from '../content/lore';
 
 const PANEL_X = CANVAS.width - CANVAS.rightPanelWidth;
 const PANEL_W = CANVAS.rightPanelWidth;
@@ -269,6 +270,7 @@ export class SidePanel {
     t2.position.set(x, y); this.body.addChild(t2);
     y += 56;
     if (summary) {
+      y = this.appendCoreReport(x, y, summary, true);
       y = this.appendRunMeta(x, y);
       const run = makeText(this.formatRunSummary(summary), { fontSize: 12, fill: 0xc0c8d8, lineHeight: 18 });
       run.position.set(x, y); this.body.addChild(run);
@@ -289,6 +291,7 @@ export class SidePanel {
     t2.position.set(x, y); this.body.addChild(t2);
     y += (t2.height as number) + 14;
     if (summary) {
+      y = this.appendCoreReport(x, y, summary, false);
       const hints = this.defeatHints(wave, summary);
       if (hints.length > 0) {
         const label = makeLabel(SIDE_PANEL_COPY.tips);
@@ -360,6 +363,9 @@ export class SidePanel {
       : 'NONE';
     return [
       `Score: ${summary.score}`,
+      `Core State: ${balanceLore[summary.maxBalanceState].title}`,
+      `Dominant Emotion: ${summary.dominantEmotionAtDeath ? EMOTION_LABEL[summary.dominantEmotionAtDeath] : 'Mixed'}`,
+      `Dominant Category: ${summary.dominantCategoryAtDeath ? categoryLoreLabel(summary.dominantCategoryAtDeath) : 'Balanced pattern'}`,
       `Kills: ${summary.killsTotal}  Boss: ${summary.bossKills}`,
       `Damage: ${top}`,
       `Memory earned: ${summary.memoryEarned}`,
@@ -464,8 +470,9 @@ export class SidePanel {
   private appendTowerBrief(x: number, y: number, type: EmotionType, includeDescription = true): number {
     const stats = TOWER_STATS[type];
     const help = TOWER_HELP_COPY[type];
+    const lore = towerLore[type];
     if (includeDescription) {
-      const desc = makeText(stats.description, {
+      const desc = makeText(`${lore.oneLine}\n${stats.description}`, {
         fontSize: 12,
         fill: 0xc0c8d8,
         wordWrap: true,
@@ -480,8 +487,10 @@ export class SidePanel {
     const detail = [
       `Category: ${TOWER_CATEGORY_LABEL[stats.category]}`,
       `Role: ${help.role}`,
-      `Strong: ${help.strengths.join(' / ')}`,
-      `Weak: ${help.weaknesses.join(' / ')}`,
+      `Response: ${lore.roleLore}`,
+      `Strong: ${lore.strengthLore}`,
+      `Weak: ${lore.weaknessLore}`,
+      `Imbalance: ${lore.imbalanceWarning}`,
       `Placement: ${help.placement}`
     ].join('\n');
     const box = new Graphics();
@@ -499,6 +508,44 @@ export class SidePanel {
     detailText.position.set(x + 10, y + 8);
     this.body.addChild(box, detailText);
     return y + boxH + 14;
+  }
+
+  private appendCoreReport(x: number, y: number, summary: RunSummary, victory: boolean): number {
+    const state = summary.maxBalanceState;
+    const dominantEmotion = summary.dominantEmotionAtDeath ? EMOTION_LABEL[summary.dominantEmotionAtDeath] : 'Mixed';
+    const dominantCategory = summary.dominantCategoryAtDeath ? categoryLoreLabel(summary.dominantCategoryAtDeath) : 'Balanced pattern';
+    const cause = victory
+      ? 'Stabilization reached. The Core survived the first fracture.'
+      : this.primaryCollapseCause(summary);
+    const report = makeText([
+      victory ? 'CORE REPORT: STABILIZED' : 'CORE REPORT: COLLAPSE',
+      cause,
+      `Core State: ${balanceLore[state].title}`,
+      `Pattern: ${dominantEmotion} / ${dominantCategory}`,
+      balanceLore[state].description
+    ].join('\n'), {
+      fontSize: 10,
+      fill: victory ? 0x77ffaa : 0xffd166,
+      wordWrap: true,
+      wordWrapWidth: PANEL_W - 56,
+      lineHeight: 14
+    });
+    const boxH = Math.max(76, (report.height as number) + 16);
+    const box = new Graphics();
+    box.roundRect(x, y, PANEL_W - 36, boxH, 7)
+      .fill({ color: 0x0a0f1a, alpha: 0.86 })
+      .stroke({ color: victory ? 0x77ffaa : 0xff5577, width: 1.2, alpha: 0.68 });
+    report.position.set(x + 10, y + 8);
+    this.body.addChild(box, report);
+    return y + boxH + 12;
+  }
+
+  private primaryCollapseCause(summary: RunSummary): string {
+    if (summary.coreDamageTaken >= 8) return 'The Core collapsed under unresolved pressure. Fast fractures slipped through the final turns.';
+    if (summary.maxBalanceState === 'overloaded' || summary.maxBalanceState === 'imbalanced') return 'The Core overloaded from repeated emotional patterns. Diversify responses to restore resonance.';
+    if (summary.bossKills === 0 && summary.killsTotal > 0) return 'A boss pattern completed its loop. Stronger single-target pressure was needed.';
+    if (summary.memoryEarned > 0 && summary.upgradesPurchased <= 2) return 'The Core had unused Memory at collapse. Spend earlier on upgrades or final-turn defenses.';
+    return 'The fracture path reached the Core before the response layer stabilized.';
   }
 
   private defeatHints(wave: number, summary: RunSummary): string[] {
