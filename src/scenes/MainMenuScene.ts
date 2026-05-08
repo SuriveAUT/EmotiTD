@@ -10,6 +10,7 @@ import { makeHeadline, makeLabel, makeText } from '../ui/text';
 import { CreditsScene } from './CreditsScene';
 import { GameScene } from './GameScene';
 import { HowToPlayScene } from './HowToPlayScene';
+import { ScoreboardScene } from './ScoreboardScene';
 import { SettingsScene } from './SettingsScene';
 
 interface MenuParticle {
@@ -116,8 +117,8 @@ export class MainMenuScene implements Scene {
     this.mapButtonDrawers = [];
     mapSelector.addChild(...MAP_LIST.map((map, index) => this.createMapButton(map, (index - (MAP_LIST.length - 1) / 2) * 260, 0)));
 
-    const buttonStartY = 410;
-    const buttonGap = 64;
+    const buttonStartY = 400;
+    const buttonGap = 56;
     const buttons = new Container();
     buttons.position.set(cx, buttonStartY);
     buttons.addChild(
@@ -126,16 +127,19 @@ export class MainMenuScene implements Scene {
         map: this.selectedMap,
         onMainMenu: () => this.sceneManager.changeScene(new MainMenuScene(this.app, this.sceneManager))
       }))),
-      this.createButton('HOW TO PLAY', 0, 1 * buttonGap, 0x6cf0ff, () => {
+      this.createButton('SCOREBOARD', 0, 1 * buttonGap, 0x77ffaa, () => {
+        this.sceneManager.changeScene(new ScoreboardScene(this.app, this.sceneManager));
+      }),
+      this.createButton('HOW TO PLAY', 0, 2 * buttonGap, 0x6cf0ff, () => {
         this.sceneManager.changeScene(new HowToPlayScene(this.app, this.sceneManager));
       }),
-      this.createButton('SETTINGS', 0, 2 * buttonGap, 0xffd166, () => {
+      this.createButton('SETTINGS', 0, 3 * buttonGap, 0xffd166, () => {
         this.sceneManager.changeScene(new SettingsScene(this.app, this.sceneManager));
       }),
-      this.createButton('CREDITS', 0, 3 * buttonGap, 0xb070ff, () => {
+      this.createButton('CREDITS', 0, 4 * buttonGap, 0xb070ff, () => {
         this.sceneManager.changeScene(new CreditsScene(this.app, this.sceneManager));
       }),
-      this.createButton('RESET SAVE', 0, 4 * buttonGap, 0xff3355, () => this.showResetConfirm())
+      this.createButton('RESET SAVE', 0, 5 * buttonGap, 0xff3355, () => this.showResetConfirm())
     );
 
     const version = makeLabel(`v${APP_VERSION}`, {

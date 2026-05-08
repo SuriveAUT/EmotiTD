@@ -14,6 +14,7 @@ export interface SaveData {
   bestWave: number;
   bestScore: number;
   tutorialCompleted: boolean;
+  lastPlayerName: string;
   settings: SaveSettings;
 }
 
@@ -25,6 +26,7 @@ const DEFAULT_SAVE_DATA: SaveData = {
   bestWave: 0,
   bestScore: 0,
   tutorialCompleted: false,
+  lastPlayerName: '',
   settings: {
     musicVolume: 0.8,
     sfxVolume: 0.8,
@@ -85,6 +87,13 @@ export class SaveManager {
     return this.getData();
   }
 
+  setLastPlayerName(name: string): SaveData {
+    const trimmed = (name ?? '').trim().slice(0, 18);
+    this.data.lastPlayerName = trimmed;
+    this.save();
+    return this.getData();
+  }
+
   completeTutorial(): SaveData {
     this.data.tutorialCompleted = true;
     this.save();
@@ -105,6 +114,9 @@ export class SaveManager {
       tutorialCompleted: typeof data.tutorialCompleted === 'boolean'
         ? data.tutorialCompleted
         : DEFAULT_SAVE_DATA.tutorialCompleted,
+      lastPlayerName: typeof data.lastPlayerName === 'string'
+        ? data.lastPlayerName.slice(0, 18)
+        : DEFAULT_SAVE_DATA.lastPlayerName,
       settings: {
         musicVolume: this.clamp01(this.numberOrDefault(settings.musicVolume, DEFAULT_SAVE_DATA.settings.musicVolume)),
         sfxVolume: this.clamp01(this.numberOrDefault(settings.sfxVolume, DEFAULT_SAVE_DATA.settings.sfxVolume)),

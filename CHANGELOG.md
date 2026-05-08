@@ -2,6 +2,17 @@
 
 Alle nennenswerten Änderungen an EMOTICORE TD werden hier festgehalten. Format orientiert sich an [Keep a Changelog](https://keepachangelog.com/de/1.1.0/), Versionierung an [SemVer](https://semver.org/lang/de/).
 
+## [Unreleased]
+
+### Added
+
+- **Online Scoreboard (Alpha, trust-based)**: minimaler Express + SQLite Backend unter `server/`.
+- POST `/api/scores`, GET `/api/scores/:mapId`, GET `/api/scores`, GET `/api/health`.
+- Score-Submit-Overlay nach Game Over / Victory inklusive lokaler Namensspeicherung (`lastPlayerName`).
+- Scoreboard-Scene im Main Menu (Top 10 pro Map und Mode).
+- Fallback: Backend offline lässt das Spiel nicht crashen, zeigt sauberen Fehlerstatus.
+- Basic Validation, helmet, CORS und Rate Limit (10 POSTs/Minute/IP).
+
 ## [0.1.0-alpha] — 2026-05-06
 
 Erster spielbarer Stand. MVP der Kernschleife steht.

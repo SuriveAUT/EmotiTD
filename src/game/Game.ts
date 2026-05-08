@@ -16,6 +16,8 @@ import { TowerBar } from '../ui/TowerBar';
 import { SidePanel } from '../ui/SidePanel';
 import { makeHeadline, makeLabel, makeText } from '../ui/text';
 import { saveManager, type SaveManager } from '../core/SaveManager';
+import { APP_VERSION } from '../core/version';
+import { ScoreSubmitOverlay } from '../ui/ScoreSubmitOverlay';
 import { TutorialManager } from './TutorialManager';
 import { STANDARD_MAX_WAVE, type GameMode } from './GameMode';
 import { SynergySystem } from './SynergySystem';
@@ -145,6 +147,8 @@ export class Game {
   private tutorial: TutorialManager | null = null;
   private victoryOverlay: Container | null = null;
   private pauseOverlay: Container | null = null;
+  private scoreSubmit: ScoreSubmitOverlay | null = null;
+  private scoreSubmittedForRun = false;
 
   constructor(app: Application, saves: SaveManager = saveManager, options: GameOptions = {}) {
     this.app = app;
@@ -249,6 +253,8 @@ export class Game {
     this.detachInput();
     this.app.stage.removeChild(this.root);
     this.tutorial = null;
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = null;
     this.root.destroy({ children: true });
   }
 
@@ -1061,6 +1067,7 @@ export class Game {
     this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
       color: 0xff5577, startRadius: 30, endRadius: 220, duration: 1.4, thickness: 5
     });
+    this.maybeOpenScoreSubmit('defeat');
   }
 
   private win() {
@@ -1080,6 +1087,37 @@ export class Game {
     this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
       color: 0x77ffaa, startRadius: 28, endRadius: 240, duration: 1.2, thickness: 4
     });
+    this.maybeOpenScoreSubmit('victory');
+  }
+
+  private maybeOpenScoreSubmit(result: 'victory' | 'defeat'): void {
+    if (this.scoreSubmittedForRun) return;
+    const score = this.calculateScore();
+    if (score <= 0) return;
+    if (this.waves.current <= 0) return;
+    this.scoreSubmittedForRun = true;
+    const summary = this.runStats.summary();
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = new ScoreSubmitOverlay({
+      payload: {
+        score,
+        wave: this.waves.current,
+        mapId: this.mapDefinition.id,
+        mapName: this.mapDefinition.name,
+        mode: this.mode,
+        result,
+        stats: {
+          towersUsed: this.towers.length,
+          upgradesPurchased: summary.upgradesPurchased,
+          killsTotal: summary.killsTotal,
+          bossKills: summary.bossKills,
+          topDamageEmotion: summary.topDamageEmotion ?? undefined
+        },
+        clientVersion: APP_VERSION
+      },
+      onClose: () => { this.scoreSubmit = null; }
+    });
+    this.scoreSubmit.mount();
   }
 
   private refreshSidePanel() {
@@ -1142,6 +1180,9 @@ export class Game {
     this.effectsLayer.removeChildren();
     this.hideVictoryOverlay();
     this.hidePauseOverlay();
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = null;
+    this.scoreSubmittedForRun = false;
 
     this.particlesLayer.removeChild(this.particles.container);
     this.particles.container.destroy({ children: true });
