@@ -21,6 +21,7 @@ import { mapLore } from '../content/lore';
 import { CreditsScene } from './CreditsScene';
 import { GameScene } from './GameScene';
 import { HowToPlayScene } from './HowToPlayScene';
+import { ScoreboardScene } from './ScoreboardScene';
 import { SettingsScene } from './SettingsScene';
 
 interface MenuParticle {
@@ -170,22 +171,25 @@ export class MainMenuScene implements Scene {
     this.refreshModeInfo();
     this.modeInfoText.visible = !this.currentRunSave;
 
-    const buttonStartY = this.currentRunSave ? 540 : 526;
-    const buttonGap = this.currentRunSave ? 52 : 56;
+    const buttonStartY = this.currentRunSave ? 520 : 506;
+    const buttonGap = this.currentRunSave ? 48 : 52;
     const buttons = new Container();
     buttons.position.set(rightX, buttonStartY);
     buttons.addChild(
       this.createButton(MENU_COPY.startRun, 0, 0 * buttonGap, 0xff5577, () => this.startNewRun()),
-      this.createButton(MENU_COPY.howToPlay, 0, 1 * buttonGap, 0x6cf0ff, () => {
+      this.createButton(MENU_COPY.scoreboard, 0, 1 * buttonGap, 0x77ffaa, () => {
+        this.sceneManager.changeScene(new ScoreboardScene(this.app, this.sceneManager));
+      }),
+      this.createButton(MENU_COPY.howToPlay, 0, 2 * buttonGap, 0x6cf0ff, () => {
         this.sceneManager.changeScene(new HowToPlayScene(this.app, this.sceneManager));
       }),
-      this.createButton(MENU_COPY.settings, 0, 2 * buttonGap, 0xffd166, () => {
+      this.createButton(MENU_COPY.settings, 0, 3 * buttonGap, 0xffd166, () => {
         this.sceneManager.changeScene(new SettingsScene(this.app, this.sceneManager));
       }),
-      this.createButton(MENU_COPY.credits, 0, 3 * buttonGap, 0xb070ff, () => {
+      this.createButton(MENU_COPY.credits, 0, 4 * buttonGap, 0xb070ff, () => {
         this.sceneManager.changeScene(new CreditsScene(this.app, this.sceneManager));
       }),
-      this.createButton(MENU_COPY.resetSave, 0, 4 * buttonGap, 0xff3355, () => this.showResetConfirm())
+      this.createButton(MENU_COPY.resetSave, 0, 5 * buttonGap, 0xff3355, () => this.showResetConfirm())
     );
 
     const resumeUi = this.currentRunSave ? this.createResumeUi(rightX, 424) : null;

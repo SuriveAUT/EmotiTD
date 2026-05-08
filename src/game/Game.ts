@@ -27,6 +27,7 @@ import { RunStats } from './RunStats';
 import { EconomyLog } from './EconomyLog';
 import { DevToolsOverlay, type DevToolsSnapshot } from '../debug/DevToolsOverlay';
 import { bossLore, waveLoreMessages } from '../content/lore';
+import { ScoreSubmitOverlay } from '../ui/ScoreSubmitOverlay';
 
 interface GameState {
   stability: number;
@@ -180,6 +181,8 @@ export class Game {
   private pauseOverlay: Container | null = null;
   private abandonConfirmOverlay: Container | null = null;
   private devTools: DevToolsOverlay | null = null;
+  private scoreSubmit: ScoreSubmitOverlay | null = null;
+  private scoreSubmittedForRun = false;
   private autoSaveTimer = 0;
   private devStabilityLogTimer = 0;
   private highLoadTimer = 0;
@@ -330,6 +333,8 @@ export class Game {
     window.removeEventListener('emoticore:renderer-context-lost', this.handleRendererContextLost);
     window.removeEventListener('emoticore:renderer-context-restored', this.handleRendererContextRestored);
     this.app.stage.removeChild(this.root);
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = null;
     this.devTools = null;
     this.tutorial = null;
     this.root.destroy({ children: true });
@@ -1618,6 +1623,7 @@ export class Game {
     this.refreshUi();
     this.shake(2);
     this.playCoreCollapseAnimation();
+    this.maybeOpenScoreSubmit('defeat');
   }
 
   private win() {
@@ -1641,6 +1647,37 @@ export class Game {
     this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
       color: 0x77ffaa, startRadius: 28, endRadius: 240, duration: 1.2, thickness: 4
     });
+    this.maybeOpenScoreSubmit('victory');
+  }
+
+  private maybeOpenScoreSubmit(result: 'victory' | 'defeat'): void {
+    if (this.scoreSubmittedForRun) return;
+    const score = this.calculateScore();
+    if (score <= 0) return;
+    if (this.waves.current <= 0) return;
+    this.scoreSubmittedForRun = true;
+    const summary = this.runStats.summary();
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = new ScoreSubmitOverlay({
+      payload: {
+        score,
+        wave: this.waves.current,
+        mapId: this.mapDefinition.id,
+        mapName: this.mapDefinition.name,
+        mode: this.mode,
+        result,
+        stats: {
+          towersUsed: this.towers.length,
+          upgradesPurchased: summary.upgradesPurchased,
+          killsTotal: summary.killsTotal,
+          bossKills: summary.bossKills,
+          topDamageEmotion: summary.topDamageEmotion ?? undefined
+        },
+        clientVersion: APP_VERSION
+      },
+      onClose: () => { this.scoreSubmit = null; }
+    });
+    this.scoreSubmit.mount();
   }
 
   private playCoreCollapseAnimation(): void {
@@ -1735,6 +1772,9 @@ export class Game {
   }
 
   private restart(mode: GameMode = this.mode) {
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = null;
+    this.scoreSubmittedForRun = false;
     this.saves.clearCurrentRun();
     for (const t of this.towers) {
       this.map.release(t.cx, t.cy);

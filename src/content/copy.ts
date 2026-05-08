@@ -315,6 +315,7 @@ export const MENU_COPY = {
   subtitle: 'Emotional responses defending an unstable Core.',
   selectMap: 'SELECT MAP',
   startRun: 'START RUN',
+  scoreboard: 'SCOREBOARD',
   howToPlay: 'HOW TO PLAY',
   settings: 'SETTINGS',
   credits: 'CREDITS',

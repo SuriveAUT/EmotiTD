@@ -28,6 +28,7 @@ export interface SaveData {
   settings: SaveSettings;
   challengeRecords: Record<string, ChallengeRecord>;
   lastChallengeSeed?: string;
+  lastPlayerName: string;
 }
 
 export interface CurrentRunTowerSave {
@@ -71,6 +72,7 @@ const DEFAULT_SAVE_DATA: SaveData = {
   tutorialCompleted: false,
   challengeRecords: {},
   lastChallengeSeed: undefined,
+  lastPlayerName: '',
   settings: {
     musicVolume: 0.8,
     sfxVolume: 0.8,
@@ -155,6 +157,11 @@ export class SaveManager {
     return this.getData();
   }
 
+  setLastPlayerName(name: string): void {
+    this.data.lastPlayerName = name;
+    this.save();
+  }
+
   getChallengeRecord(mode: string, mapId: string): ChallengeRecord | null {
     return this.data.challengeRecords[this.challengeKey(mode, mapId)] ?? null;
   }
@@ -210,6 +217,7 @@ export class SaveManager {
         : DEFAULT_SAVE_DATA.tutorialCompleted,
       challengeRecords: this.normalizeChallengeRecords(data.challengeRecords),
       lastChallengeSeed: typeof data.lastChallengeSeed === 'string' ? data.lastChallengeSeed : DEFAULT_SAVE_DATA.lastChallengeSeed,
+      lastPlayerName: typeof data.lastPlayerName === 'string' ? data.lastPlayerName : '',
       settings: {
         musicVolume: this.clamp01(this.numberOrDefault(settings.musicVolume, DEFAULT_SAVE_DATA.settings.musicVolume)),
         sfxVolume: this.clamp01(this.numberOrDefault(settings.sfxVolume, DEFAULT_SAVE_DATA.settings.sfxVolume)),
