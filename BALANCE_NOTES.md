@@ -1,5 +1,35 @@
 # EMOTICORE TD Balance Notes
 
+## v0.1.3-alpha - Endless Compression + Emotional Balance Rework (2026-05)
+
+### Trigger
+- Wave 104 test showed 234 towers built, 7177 total kills, 4948 Doubtlings and only 6 BossKills.
+- The issue was not economy overflow: Final Memory was 154, so bounties and income were left alone.
+- The main problems were late Endless trash density, weak Emotional Balance consequences, visual clutter and boss tracking pressure.
+
+### Why no hard tower limit
+- Tower spam is not artificially forbidden.
+- Instead, emotional dominance and category dominance now create thematic consequences.
+- A player can still commit heavily to one plan, but overloading one emotion/category now has clear costs.
+
+### New balance logic
+- Towers contribute weighted influence, not only raw count.
+- Upgrade levels increase influence by `+0.25` each, capped per tower.
+- Balance states:
+  - Stable: no emotion over 22% and no category over 42%.
+  - Tense: emotion 22-28% or category 42-50%.
+  - Imbalanced: emotion 28-36% or category 50-60%.
+  - Overloaded: emotion over 36% or category over 60%.
+- Early game gates prevent harsh penalties before enough towers exist.
+- Mixed builds can activate Resonance and Deep Resonance bonuses.
+- Dominant emotion penalties reduce that emotion's efficiency and give enemies adaptation against it.
+- Dominant category penalties fit the category: Control weakens CC, Support weakens buffs, Damage increases leak risk, Defense increases enemy HP pressure.
+
+### Endless compression
+- Endless after Wave 30 now reduces Doubtling mass and shifts pressure toward GuiltGiant, BurnoutBrute, VoidWraith, Overthinker and NumbOne.
+- Max enemies per wave compresses after Wave 50 and Wave 80.
+- Simultaneous enemies are capped by quality and queued spawns are delayed instead of discarded.
+
 ## Balance Pass 2 - Hard Mode Implementation (2026-05)
 
 ### Goals

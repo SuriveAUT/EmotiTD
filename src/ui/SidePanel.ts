@@ -27,7 +27,7 @@ const PANEL_X = CANVAS.width - CANVAS.rightPanelWidth;
 const PANEL_W = CANVAS.rightPanelWidth;
 const PANEL_Y = CANVAS.hudHeight;
 const PANEL_H = CANVAS.height - CANVAS.hudHeight;
-const UPGRADE_BUTTON_H = 72;
+const UPGRADE_BUTTON_H = 96;
 const SCROLL_PAD_TOP = 8;
 const SCROLL_PAD_BOTTOM = 12;
 const VIEWPORT_H = PANEL_H - SCROLL_PAD_TOP - SCROLL_PAD_BOTTOM;
@@ -116,7 +116,7 @@ export class SidePanel {
 
   clear(viewKey = 'default') {
     this.saveScrollForCurrentView();
-    this.body.removeChildren();
+    this.body.removeChildren().forEach((child) => child.destroy({ children: true }));
     this.currentViewKey = viewKey;
     this.scrollY = this.scrollYByViewKey.get(viewKey) ?? 0;
     this.body.y = 0;
@@ -183,6 +183,7 @@ export class SidePanel {
     y = this.appendTowerBrief(x, y, t.type, false);
 
     y = this.appendStats(x, y, t.type, t.getEffectiveStats());
+    y = this.appendDamageBreakdown(x, y, t);
     y = this.appendSynergy(x, y, TOWER_STATS[t.type].synergies);
     y = this.appendActiveSynergies(x, y);
     y += 8;
@@ -427,6 +428,39 @@ export class SidePanel {
     return y + 12;
   }
 
+  private appendDamageBreakdown(x: number, y: number, tower: Tower): number {
+    const breakdown = tower.getStatBreakdown().damage;
+    const label = makeLabel('DAMAGE BREAKDOWN');
+    label.position.set(x, y);
+    this.body.addChild(label);
+    y += 18;
+
+    const lines = [
+      `Base ${Math.round(breakdown.base)} -> Upgraded ${Math.round(breakdown.upgraded)} (${formatPercent(breakdown.upgradePercent)})`,
+      `Final ${Math.round(breakdown.final)}  /  Active x${breakdown.multiplier.toFixed(2)}`
+    ];
+    const bonusLines = breakdown.lines.length > 0
+      ? breakdown.lines.slice(0, 5)
+      : ['No local synergy bonuses applied.'];
+    if (breakdown.lines.length > 5) bonusLines.push(`+${breakdown.lines.length - 5} more`);
+
+    const text = makeText([...lines, ...bonusLines].join('\n'), {
+      fontSize: 10,
+      fill: 0xc0c8d8,
+      wordWrap: true,
+      wordWrapWidth: PANEL_W - 46,
+      lineHeight: 14
+    });
+    const boxH = Math.max(58, (text.height as number) + 14);
+    const box = new Graphics();
+    box.roundRect(x, y, PANEL_W - 36, boxH, 7)
+      .fill({ color: 0x0a0f1a, alpha: 0.82 })
+      .stroke({ color: EMOTION_COLOR[tower.type], width: 1, alpha: 0.42 });
+    text.position.set(x + 10, y + 7);
+    this.body.addChild(box, text);
+    return y + boxH + 12;
+  }
+
   private appendTowerBrief(x: number, y: number, type: EmotionType, includeDescription = true): number {
     const stats = TOWER_STATS[type];
     const help = TOWER_HELP_COPY[type];
@@ -471,6 +505,8 @@ export class SidePanel {
     const hints: string[] = [];
     if (summary.upgradesPurchased <= Math.max(1, Math.floor(wave / 7))) hints.push('Too few upgrades. Commit to one path on your most important towers.');
     if (wave >= 10 && summary.bossKills === 0) hints.push('Low damage against bosses. Add Pride, Guilt, poison, or mixed upgraded damage.');
+    if (summary.maxBalanceState === 'overloaded') hints.push('Your build overloaded emotionally. Mix emotions or categories to regain Resonance.');
+    else if (summary.maxBalanceState === 'imbalanced') hints.push('Emotional imbalance hurt efficiency. Add variety before scaling one emotion further.');
     if (summary.maxResonanceTime < 2 && wave >= 6) hints.push('Try mixing emotions for local synergies and Resonance.');
     if (summary.coreDamageTaken >= 6) hints.push('Too many leaks. Add earlier slow, fast targeting, or more damage near the final turns.');
     return hints.slice(0, 2);
@@ -513,7 +549,7 @@ export class SidePanel {
     for (const synergy of this.activeSynergies.slice(0, maxDisplayed)) {
       const title = makeText(synergy.label, { fontSize: 11, fill: 0x77ffaa, fontWeight: '700', letterSpacing: 1 });
       title.position.set(x, y);
-      const desc = makeText(synergy.description, {
+      const desc = makeText(`${synergy.bonusLabel ? `${synergy.bonusLabel}: ` : ''}${synergy.description}`, {
         fontSize: 9,
         fill: 0x9aa6bd,
         wordWrap: true,
@@ -522,7 +558,7 @@ export class SidePanel {
       });
       desc.position.set(x, y + 14);
       this.body.addChild(title, desc);
-      y += Math.max(34, 18 + (desc.height as number));
+      y += Math.max(38, 18 + (desc.height as number));
     }
 
     if (this.activeSynergies.length > maxDisplayed) {
@@ -557,7 +593,7 @@ export class SidePanel {
 
     const current = tower.getTargetingMode();
     const buttonW = 76;
-    const buttonH = 24;
+    const buttonH = 28;
     TARGETING_MODES.forEach((mode, index) => {
       const col = index % 3;
       const row = Math.floor(index / 3);
@@ -656,6 +692,7 @@ export class SidePanel {
     if (!enabled && !maxed) bg.roundRect(0, 0, w, UPGRADE_BUTTON_H, 7).fill({ color: 0x000000, alpha: 0.38 });
     btn.addChild(bg);
 
+    const maxLevel = def.levels.length;
     const title = makeText(`${path}  ${def.title}`, {
       fontSize: 11,
       fontWeight: '700',
@@ -665,11 +702,11 @@ export class SidePanel {
     title.position.set(10, 8);
     btn.addChild(title);
 
-    const role = makeText(def.role, { fontSize: 10, fill: locked ? 0x566178 : 0xc0c8d8, wordWrap: true, wordWrapWidth: w - 20 });
+    const role = makeText(def.role, { fontSize: 10, fill: locked ? 0x566178 : 0xc0c8d8, wordWrap: true, wordWrapWidth: w - 20, lineHeight: 13 });
     role.position.set(10, 26);
     btn.addChild(role);
 
-    const levelText = `${active ? state.level : 0}/4`;
+    const levelText = `${active ? state.level : 0}/${maxLevel}`;
     const subText =
       locked ? SIDE_PANEL_COPY.lockedByOtherPath :
       maxed ? SIDE_PANEL_COPY.levelMax(levelText) :
@@ -680,14 +717,13 @@ export class SidePanel {
       letterSpacing: 1,
       fill: enabled ? 0xffd166 : maxed ? 0x77ffaa : 0x7d8ba6
     });
-    sub.position.set(10, 48);
+    sub.position.set(10, 56);
     btn.addChild(sub);
 
     const summary = locked || nextCost === null ? '' : def.levels[state.path === path ? state.level : 0]?.summary ?? '';
     if (summary) {
-      const s = makeText(summary, { fontSize: 9, fill: 0x7d8ba6 });
-      s.anchor.set(1, 0);
-      s.position.set(w - 10, 49);
+      const s = makeText(summary, { fontSize: 9, fill: 0x9aa6bd, wordWrap: true, wordWrapWidth: w - 20, lineHeight: 12 });
+      s.position.set(10, 72);
       btn.addChild(s);
     }
 
@@ -704,6 +740,8 @@ export class SidePanel {
     const colors: Record<EnemyKind, number> = {
       [EnemyKind.Doubtling]: 0xb070ff,
       [EnemyKind.PanicRunner]: 0xff5577,
+      [EnemyKind.Fractureling]: 0x6cf0ff,
+      [EnemyKind.PressureKnot]: 0xffd166,
       [EnemyKind.GuiltGiant]: 0xffd166,
       [EnemyKind.ShameSwarm]: 0xff77ff,
       [EnemyKind.EnvyLeech]: 0x77ffaa,
@@ -799,4 +837,9 @@ function aggregateComposition(def: WaveDef): [EnemyKind, number][] {
   const map = new Map<EnemyKind, number>();
   for (const g of def.groups) map.set(g.kind, (map.get(g.kind) ?? 0) + g.count);
   return [...map.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function formatPercent(value: number): string {
+  const rounded = Math.round(value);
+  return `${rounded >= 0 ? '+' : ''}${rounded}%`;
 }

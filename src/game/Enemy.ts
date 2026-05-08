@@ -91,6 +91,8 @@ export class Enemy {
     switch (this.kind) {
       case EnemyKind.Doubtling: this.drawDoubtling(g); break;
       case EnemyKind.PanicRunner: this.drawPanic(g); break;
+      case EnemyKind.Fractureling: this.drawFractureling(g); break;
+      case EnemyKind.PressureKnot: this.drawPressureKnot(g); break;
       case EnemyKind.GuiltGiant: this.drawGuilt(g); break;
       case EnemyKind.ShameSwarm: this.drawShame(g); break;
       case EnemyKind.EnvyLeech: this.drawEnvy(g); break;
@@ -124,6 +126,35 @@ export class Enemy {
     g.circle(-r * 0.2, 0, r * 0.3).fill({ color: 0xff5577, alpha: 0.9 });
     g.moveTo(-r * 1.15, -r * 0.62).lineTo(-r * 1.65, -r * 0.62).stroke({ color: 0xffd166, width: 1.5, alpha: 0.8 });
     g.moveTo(-r * 1.08, r * 0.55).lineTo(-r * 1.48, r * 0.55).stroke({ color: 0xffd166, width: 1.2, alpha: 0.65 });
+  }
+
+  private drawFractureling(g: Graphics) {
+    const r = this.radius;
+    g.circle(0, 0, r + 5).fill({ color: 0x07111d, alpha: 0.62 });
+    g.poly([
+      -r * 0.95, -r * 0.25,
+      -r * 0.25, -r * 1.05,
+      r * 0.85, -r * 0.55,
+      r * 0.62, r * 0.65,
+      -r * 0.18, r * 1.05,
+      -r * 1.05, r * 0.35
+    ]).fill({ color: 0x0b1c2a, alpha: 1 }).stroke({ color: 0x6cf0ff, width: 1.8, alpha: 0.88 });
+    g.moveTo(-r * 0.55, r * 0.38).lineTo(r * 0.72, -r * 0.48).stroke({ color: 0xff77ff, width: 1.4, alpha: 0.82 });
+    g.moveTo(-r * 0.25, -r * 0.78).lineTo(r * 0.18, r * 0.82).stroke({ color: 0x6cf0ff, width: 1.1, alpha: 0.62 });
+    g.circle(0, 0, r * 0.28).fill({ color: 0xff77ff, alpha: 0.78 });
+  }
+
+  private drawPressureKnot(g: Graphics) {
+    const r = this.radius;
+    g.circle(0, 0, r + 7).fill({ color: 0x140b08, alpha: 0.72 });
+    g.circle(0, 0, r + 3).stroke({ color: 0xffd166, width: 2, alpha: 0.45 });
+    g.circle(0, 0, r).fill({ color: 0x17111a, alpha: 1 }).stroke({ color: 0xff8a4d, width: 2, alpha: 0.82 });
+    for (let i = 0; i < 3; i++) {
+      const a = i * TAU / 3 + Math.PI / 7;
+      g.ellipse(Math.cos(a) * r * 0.22, Math.sin(a) * r * 0.22, r * 0.82, r * 0.24)
+        .stroke({ color: i === 1 ? 0xffd166 : 0xff8a4d, width: 1.5, alpha: 0.68 });
+    }
+    g.circle(0, 0, r * 0.32).fill({ color: 0xffd166, alpha: 0.72 });
   }
 
   private drawGuilt(g: Graphics) {
@@ -606,6 +637,10 @@ export class Enemy {
     }
     if (this.kind === EnemyKind.EnvyLeech && Math.random() < 0.28) {
       particles.trail(this.x + rand(-8, 8), this.y + rand(-8, 8), 0x77ffaa, 1.9);
+    } else if (this.kind === EnemyKind.Fractureling && Math.random() < 0.18) {
+      particles.trail(this.x + rand(-8, 8), this.y + rand(-8, 8), Math.random() < 0.5 ? 0x6cf0ff : 0xff77ff, 1.7);
+    } else if (this.kind === EnemyKind.PressureKnot && Math.random() < 0.16) {
+      particles.trail(this.x + rand(-7, 7), this.y + rand(-7, 7), 0xffd166, 1.8);
     } else if (this.kind === EnemyKind.BurnoutBrute && Math.random() < 0.22) {
       particles.trail(this.x + rand(-10, 10), this.y + rand(-10, 10), 0xff5b3a, 2.2);
     } else if (this.kind === EnemyKind.Overthinker && Math.random() < (this.thinkChannelTimer > 0 ? 0.48 : 0.18)) {
@@ -630,6 +665,8 @@ export class Enemy {
     const colorMap: Record<EnemyKind, number> = {
       [EnemyKind.Doubtling]: 0xb070ff,
       [EnemyKind.PanicRunner]: 0xff5577,
+      [EnemyKind.Fractureling]: 0x6cf0ff,
+      [EnemyKind.PressureKnot]: 0xffd166,
       [EnemyKind.GuiltGiant]: 0xffd166,
       [EnemyKind.ShameSwarm]: 0xff77ff,
       [EnemyKind.EnvyLeech]: 0x77ffaa,
@@ -648,11 +685,15 @@ export class Enemy {
       speedMin: 60, speedMax: 220,
       sizeMin: 1.5, sizeMax: 3.5,
       lifeMin: 0.4, lifeMax: 0.9,
-      drag: 2.5, shape: this.kind === EnemyKind.ShameSwarm ? 'shard' : 'circle'
+      drag: 2.5, shape: this.kind === EnemyKind.ShameSwarm ? 'shard' : 'circle',
+      visualKind: 'death',
+      important: isBossKind(this.kind)
     });
     particles.ring(this.x, this.y, {
       color: c, startRadius: this.radius, endRadius: this.radius + 40,
-      duration: 0.4, thickness: 2
+      duration: 0.4, thickness: 2,
+      visualKind: 'death',
+      important: isBossKind(this.kind)
     });
   }
 

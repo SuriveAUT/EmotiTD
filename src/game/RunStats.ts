@@ -1,4 +1,5 @@
-import { BOSS_KINDS, EMOTION_TYPES, EmotionType, EnemyKind, isBossKind } from './types';
+import { BOSS_KINDS, EMOTION_TYPES, EmotionType, EnemyKind, isBossKind, type TowerCategory } from './types';
+import type { BalanceAnalysis, BalanceState } from './EmotionalBalance';
 
 export interface RunSummary {
   score: number;
@@ -14,6 +15,15 @@ export interface RunSummary {
   highestUpgradeLevel: number;
   maxActiveSynergies: number;
   towersUsed: number;
+  maxBalanceState: BalanceState;
+  timeInStable: number;
+  timeInTense: number;
+  timeInImbalanced: number;
+  timeInOverloaded: number;
+  dominantEmotionAtDeath: EmotionType | null;
+  dominantCategoryAtDeath: TowerCategory | null;
+  maxDominantEmotionShare: number;
+  maxDominantCategoryShare: number;
 }
 
 export interface RunStatsJson extends RunSummary {
@@ -25,6 +35,8 @@ export interface RunStatsJson extends RunSummary {
 const ENEMY_KINDS: EnemyKind[] = [
   EnemyKind.Doubtling,
   EnemyKind.PanicRunner,
+  EnemyKind.Fractureling,
+  EnemyKind.PressureKnot,
   EnemyKind.GuiltGiant,
   EnemyKind.ShameSwarm,
   EnemyKind.EnvyLeech,
@@ -49,6 +61,15 @@ export class RunStats {
   maxResonanceTime = 0;
   highestUpgradeLevel = 0;
   maxActiveSynergies = 0;
+  maxBalanceState: BalanceState = 'stable';
+  timeInStable = 0;
+  timeInTense = 0;
+  timeInImbalanced = 0;
+  timeInOverloaded = 0;
+  dominantEmotionAtDeath: EmotionType | null = null;
+  dominantCategoryAtDeath: TowerCategory | null = null;
+  maxDominantEmotionShare = 0;
+  maxDominantCategoryShare = 0;
   private currentResonanceTime = 0;
 
   recordKill(kind: EnemyKind, bounty: number, wave: number): void {
@@ -116,6 +137,25 @@ export class RunStats {
     }
   }
 
+  updateBalance(dt: number, analysis: BalanceAnalysis): void {
+    if (dt <= 0) return;
+    if (analysis.state === 'stable') this.timeInStable += dt;
+    else if (analysis.state === 'tense') this.timeInTense += dt;
+    else if (analysis.state === 'imbalanced') this.timeInImbalanced += dt;
+    else this.timeInOverloaded += dt;
+    if (balanceRank(analysis.state) > balanceRank(this.maxBalanceState)) this.maxBalanceState = analysis.state;
+    this.maxDominantEmotionShare = Math.max(this.maxDominantEmotionShare, analysis.dominantEmotionShare);
+    this.maxDominantCategoryShare = Math.max(this.maxDominantCategoryShare, analysis.dominantCategoryShare);
+  }
+
+  recordFinalBalance(analysis: BalanceAnalysis): void {
+    this.dominantEmotionAtDeath = analysis.dominantEmotion;
+    this.dominantCategoryAtDeath = analysis.dominantCategory;
+    this.maxDominantEmotionShare = Math.max(this.maxDominantEmotionShare, analysis.dominantEmotionShare);
+    this.maxDominantCategoryShare = Math.max(this.maxDominantCategoryShare, analysis.dominantCategoryShare);
+    if (balanceRank(analysis.state) > balanceRank(this.maxBalanceState)) this.maxBalanceState = analysis.state;
+  }
+
   summary(): RunSummary {
     let topDamageEmotion: EmotionType | null = null;
     let topDamage = 0;
@@ -139,7 +179,16 @@ export class RunStats {
       topDamage,
       highestUpgradeLevel: this.highestUpgradeLevel,
       maxActiveSynergies: this.maxActiveSynergies,
-      towersUsed: Object.values(this.towersBuiltByEmotion).filter((count) => count > 0).length
+      towersUsed: Object.values(this.towersBuiltByEmotion).filter((count) => count > 0).length,
+      maxBalanceState: this.maxBalanceState,
+      timeInStable: this.timeInStable,
+      timeInTense: this.timeInTense,
+      timeInImbalanced: this.timeInImbalanced,
+      timeInOverloaded: this.timeInOverloaded,
+      dominantEmotionAtDeath: this.dominantEmotionAtDeath,
+      dominantCategoryAtDeath: this.dominantCategoryAtDeath,
+      maxDominantEmotionShare: this.maxDominantEmotionShare,
+      maxDominantCategoryShare: this.maxDominantCategoryShare
     };
   }
 
@@ -165,6 +214,15 @@ export class RunStats {
     stats.maxResonanceTime = numberOrDefault(json.maxResonanceTime, 0);
     stats.highestUpgradeLevel = numberOrDefault(json.highestUpgradeLevel, 0);
     stats.maxActiveSynergies = numberOrDefault(json.maxActiveSynergies, 0);
+    stats.maxBalanceState = isBalanceState(json.maxBalanceState) ? json.maxBalanceState : 'stable';
+    stats.timeInStable = numberOrDefault(json.timeInStable, 0);
+    stats.timeInTense = numberOrDefault(json.timeInTense, 0);
+    stats.timeInImbalanced = numberOrDefault(json.timeInImbalanced, 0);
+    stats.timeInOverloaded = numberOrDefault(json.timeInOverloaded, 0);
+    stats.dominantEmotionAtDeath = isEmotion(json.dominantEmotionAtDeath) ? json.dominantEmotionAtDeath : null;
+    stats.dominantCategoryAtDeath = isCategory(json.dominantCategoryAtDeath) ? json.dominantCategoryAtDeath : null;
+    stats.maxDominantEmotionShare = numberOrDefault(json.maxDominantEmotionShare, 0);
+    stats.maxDominantCategoryShare = numberOrDefault(json.maxDominantCategoryShare, 0);
 
     for (const kind of ENEMY_KINDS) {
       stats.killsByEnemyKind[kind] = numberOrDefault(json.killsByEnemyKind?.[kind], 0);
@@ -191,4 +249,20 @@ export class RunStats {
 
 function numberOrDefault(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+function balanceRank(state: BalanceState): number {
+  return state === 'overloaded' ? 3 : state === 'imbalanced' ? 2 : state === 'tense' ? 1 : 0;
+}
+
+function isBalanceState(value: unknown): value is BalanceState {
+  return value === 'stable' || value === 'tense' || value === 'imbalanced' || value === 'overloaded';
+}
+
+function isEmotion(value: unknown): value is EmotionType {
+  return typeof value === 'string' && (EMOTION_TYPES as string[]).includes(value);
+}
+
+function isCategory(value: unknown): value is TowerCategory {
+  return value === 'damage' || value === 'control' || value === 'support' || value === 'defense';
 }

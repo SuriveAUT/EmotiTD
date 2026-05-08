@@ -33,6 +33,7 @@ export interface SynergyDef {
   label: string;
   emotions: readonly [EmotionType, EmotionType];
   description: string;
+  bonusLabel?: string;
   modifiers: Partial<Record<EmotionType, SynergyModifiers>>;
   activationRadius?: number;
 }
@@ -43,6 +44,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'RADIANT RAGE',
     emotions: [EmotionType.Anger, EmotionType.Joy],
     description: 'Anger splash hits throw bonus sparks into nearby enemies.',
+    bonusLabel: 'Splash sparks: 2 / 22% damage',
     activationRadius: 170,
     modifiers: {
       [EmotionType.Anger]: { splashSparkDamageMul: 0.22, splashSparkRadius: 92, splashSparkCount: 2 }
@@ -53,6 +55,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'PANIC BLAST',
     emotions: [EmotionType.Anger, EmotionType.Fear],
     description: 'Anger splash hits gain a small stun chance.',
+    bonusLabel: '+6% splash stun chance',
     activationRadius: 165,
     modifiers: {
       [EmotionType.Anger]: { splashFearChance: 0.06, splashFearStunDuration: 0.18 }
@@ -63,6 +66,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'DEEP STILLNESS',
     emotions: [EmotionType.Sadness, EmotionType.Calm],
     description: 'Sadness slows last longer.',
+    bonusLabel: '+0.15s slow duration',
     activationRadius: 190,
     modifiers: {
       [EmotionType.Sadness]: { slowDurationAdd: 0.15 }
@@ -73,6 +77,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'BLUE STAR',
     emotions: [EmotionType.Sadness, EmotionType.Hope],
     description: 'Sadness gains bonus pressure against Numb Ones.',
+    bonusLabel: 'x1.28 vs Numb One',
     activationRadius: 185,
     modifiers: {
       [EmotionType.Sadness]: { numbDamageMul: 1.28 }
@@ -83,6 +88,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'SOFT ECHO',
     emotions: [EmotionType.Joy, EmotionType.Calm],
     description: 'Joy chains reach farther.',
+    bonusLabel: '+34 chain range',
     activationRadius: 190,
     modifiers: {
       [EmotionType.Joy]: { chainRangeAdd: 34 }
@@ -93,6 +99,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'BRIGHT RESONANCE',
     emotions: [EmotionType.Joy, EmotionType.Hope],
     description: 'Joy gets stronger during Resonance.',
+    bonusLabel: '+8% resonance damage',
     activationRadius: 185,
     modifiers: {
       [EmotionType.Joy]: { resonanceDamageMul: 1.08 }
@@ -103,6 +110,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'QUIET DREAD',
     emotions: [EmotionType.Fear, EmotionType.Calm],
     description: 'Fear stuns last slightly longer.',
+    bonusLabel: '+0.04s stun duration',
     activationRadius: 180,
     modifiers: {
       [EmotionType.Fear]: { stunDurationAdd: 0.04 }
@@ -113,6 +121,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'COURAGE SPIKE',
     emotions: [EmotionType.Fear, EmotionType.Hope],
     description: 'Fear deals bonus damage to fast enemies.',
+    bonusLabel: 'x1.32 vs fast enemies',
     activationRadius: 175,
     modifiers: {
       [EmotionType.Fear]: { fastEnemyDamageMul: 1.32 }
@@ -123,6 +132,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'SOUR RAIN',
     emotions: [EmotionType.Disgust, EmotionType.Sadness],
     description: 'Disgust poison lasts longer and Sadness slows bite longer.',
+    bonusLabel: '+10% poison DPS / +0.10s slow',
     modifiers: {
       [EmotionType.Disgust]: { poisonDpsMul: 1.10 },
       [EmotionType.Sadness]: { slowDurationAdd: 0.10 }
@@ -133,6 +143,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'REVULSION LOCK',
     emotions: [EmotionType.Disgust, EmotionType.Fear],
     description: 'Disgust shreds armor harder; Fear holds targets longer.',
+    bonusLabel: '+0.04 shred / +0.04s stun',
     modifiers: {
       [EmotionType.Disgust]: { armorShredAdd: 0.04 },
       [EmotionType.Fear]: { stunDurationAdd: 0.04 }
@@ -143,6 +154,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'BLAME BURST',
     emotions: [EmotionType.Guilt, EmotionType.Anger],
     description: 'Guilt marks stack slightly harder; Anger keeps splash pressure.',
+    bonusLabel: '+3% mark / bonus splash spark',
     modifiers: {
       [EmotionType.Guilt]: { guiltMarkAdd: 0.03 },
       [EmotionType.Anger]: { splashSparkDamageMul: 0.14, splashSparkRadius: 74, splashSparkCount: 1 }
@@ -153,6 +165,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'REDEMPTION',
     emotions: [EmotionType.Guilt, EmotionType.Hope],
     description: 'Guilt executes slightly earlier and Hope gains resonance bite.',
+    bonusLabel: '+2.5% execute / +5% resonance',
     modifiers: {
       [EmotionType.Guilt]: { guiltExecuteThresholdAdd: 0.025 },
       [EmotionType.Hope]: { resonanceDamageMul: 1.05 }
@@ -163,6 +176,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'SAFE HARBOR',
     emotions: [EmotionType.Trust, EmotionType.Calm],
     description: 'Trust shields more while Calm improves support tempo.',
+    bonusLabel: '+18% shield modifier',
     modifiers: {
       [EmotionType.Trust]: { coreShieldMul: 1.18 },
       [EmotionType.Calm]: { slowDurationAdd: 0.2 }
@@ -173,6 +187,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'OPEN HAND',
     emotions: [EmotionType.Trust, EmotionType.Joy],
     description: 'Trust anchors longer and Joy chains reach farther.',
+    bonusLabel: '+0.25s anchor / +18 chain range',
     modifiers: {
       [EmotionType.Trust]: { trustAnchorDurationAdd: 0.25 },
       [EmotionType.Joy]: { chainRangeAdd: 18 }
@@ -183,6 +198,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'SOCIAL DREAD',
     emotions: [EmotionType.Shame, EmotionType.Fear],
     description: 'Shame exposes groups harder while Fear holds them in place.',
+    bonusLabel: '+12% group expose / +0.04s stun',
     modifiers: {
       [EmotionType.Shame]: { shameGroupDamageMul: 1.12 },
       [EmotionType.Fear]: { stunDurationAdd: 0.04 }
@@ -193,6 +209,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'SOUR SPOTLIGHT',
     emotions: [EmotionType.Shame, EmotionType.Disgust],
     description: 'Grouped targets take stronger Shame pressure and longer poison.',
+    bonusLabel: '+14 group radius / +8% poison DPS',
     activationRadius: 175,
     modifiers: {
       [EmotionType.Shame]: { shameGroupRadiusAdd: 14 },
@@ -204,6 +221,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'BRIGHT BOND',
     emotions: [EmotionType.Love, EmotionType.Joy],
     description: 'Love links add damage and Joy chains reach farther.',
+    bonusLabel: '+8% link damage / +16 chain range',
     activationRadius: 220,
     modifiers: {
       [EmotionType.Love]: { loveDamageMul: 1.08 },
@@ -215,6 +233,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'SECURE BOND',
     emotions: [EmotionType.Love, EmotionType.Trust],
     description: 'Love links pulse faster and Trust shields harder.',
+    bonusLabel: '+6% link tempo / +10% shield',
     activationRadius: 220,
     modifiers: {
       [EmotionType.Love]: { loveFireRateMul: 0.94 },
@@ -226,6 +245,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'PROVING POINT',
     emotions: [EmotionType.Pride, EmotionType.Guilt],
     description: 'Pride gets more isolated damage while Guilt marks hit harder.',
+    bonusLabel: '+12% isolated damage / +2% mark',
     activationRadius: 145,
     modifiers: {
       [EmotionType.Pride]: { prideIsolationDamageMul: 1.12 },
@@ -237,6 +257,7 @@ export const SYNERGY_DEFS: SynergyDef[] = [
     label: 'SELF WORTH',
     emotions: [EmotionType.Pride, EmotionType.Love],
     description: 'Pride boss shots and Love links both strengthen.',
+    bonusLabel: '+8% isolated damage / +6% link damage',
     activationRadius: 145,
     modifiers: {
       [EmotionType.Pride]: { prideIsolationDamageMul: 1.08 },

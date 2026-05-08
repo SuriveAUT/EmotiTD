@@ -272,6 +272,34 @@ export class GameMap {
             .fill({ color: accent ? gridStrongColor : gridColor, alpha: accent ? 0.85 : 0.45 });
         }
       }
+    } else if (style === 'panic') {
+      for (let cx = 0; cx <= this.cols; cx++) {
+        const x = FIELD.x + cx * GRID_SIZE;
+        for (let y = FIELD.y; y < FIELD.y + this.rows * GRID_SIZE; y += GRID_SIZE * 2) {
+          if ((cx + y / GRID_SIZE) % 5 === 0) continue;
+          const jitter = ((cx * 13 + y) % 7) - 3;
+          g.moveTo(x + jitter, y).lineTo(x + jitter, Math.min(y + GRID_SIZE * 1.25, FIELD.y + this.rows * GRID_SIZE));
+        }
+      }
+      for (let cy = 0; cy <= this.rows; cy++) {
+        const y = FIELD.y + cy * GRID_SIZE;
+        for (let x = FIELD.x; x < FIELD.x + this.cols * GRID_SIZE; x += GRID_SIZE * 2) {
+          if ((cy + x / GRID_SIZE) % 4 === 0) continue;
+          const jitter = ((cy * 17 + x) % 7) - 3;
+          g.moveTo(x, y + jitter).lineTo(Math.min(x + GRID_SIZE * 1.3, FIELD.x + this.cols * GRID_SIZE), y + jitter);
+        }
+      }
+      g.stroke({ color: gridColor, width: 1, alpha: 0.38 });
+    } else if (style === 'fractured') {
+      for (let cx = 0; cx <= this.cols; cx += 2) {
+        const x = FIELD.x + cx * GRID_SIZE;
+        g.moveTo(x, FIELD.y).lineTo(x + ((cx % 4) - 1) * 5, FIELD.y + this.rows * GRID_SIZE);
+      }
+      for (let cy = 0; cy <= this.rows; cy += 2) {
+        const y = FIELD.y + cy * GRID_SIZE;
+        g.moveTo(FIELD.x, y).lineTo(FIELD.x + this.cols * GRID_SIZE, y + ((cy % 4) - 1) * 4);
+      }
+      g.stroke({ color: gridColor, width: 1, alpha: 0.32 });
     } else {
       for (let cx = 0; cx <= this.cols; cx++) {
         const x = FIELD.x + cx * GRID_SIZE;
@@ -281,7 +309,7 @@ export class GameMap {
         const y = FIELD.y + cy * GRID_SIZE;
         g.moveTo(FIELD.x, y).lineTo(FIELD.x + this.cols * GRID_SIZE, y);
       }
-      g.stroke({ color: gridColor, width: 1, alpha: 0.65 });
+      g.stroke({ color: gridColor, width: 1, alpha: 0.42 });
 
       // accent every 4th line
       for (let cx = 0; cx <= this.cols; cx += 4) {
@@ -292,7 +320,7 @@ export class GameMap {
         const y = FIELD.y + cy * GRID_SIZE;
         g.moveTo(FIELD.x, y).lineTo(FIELD.x + this.cols * GRID_SIZE, y);
       }
-      g.stroke({ color: gridStrongColor, width: 1, alpha: 0.5 });
+      g.stroke({ color: gridStrongColor, width: 1, alpha: 0.32 });
     }
   }
 

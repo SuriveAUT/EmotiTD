@@ -224,7 +224,8 @@ export class Projectile {
       sizeMin: impact.sizeMin, sizeMax: impact.sizeMax,
       lifeMin: 0.14, lifeMax: impact.lifeMax,
       drag: 4,
-      shape: impact.shape
+      shape: impact.shape,
+      visualKind: 'impact'
     });
     if (impact.ringRadius > 0) {
       particles.ring(this.x, this.y, {
@@ -233,20 +234,23 @@ export class Projectile {
         endRadius: impact.ringRadius,
         duration: 0.22,
         thickness: impact.ringThickness,
-        alpha: impact.ringAlpha
+        alpha: impact.ringAlpha,
+        visualKind: 'impact'
       });
     }
     if (this.spec.type === EmotionType.Hope && t.kind === EnemyKind.NumbOne) {
       particles.ring(this.x, this.y, {
         color: 0xf7f3a6, startRadius: 3, endRadius: 34,
-        duration: 0.24, thickness: 2, alpha: 0.9
+        duration: 0.24, thickness: 2, alpha: 0.9,
+        visualKind: 'impact'
       });
       particles.burst(this.x, this.y, {
         count: 6, color: 0xffffff,
         speedMin: 55, speedMax: 150,
         sizeMin: 0.9, sizeMax: 1.9,
         lifeMin: 0.14, lifeMax: 0.28,
-        drag: 4, shape: 'spark'
+        drag: 4, shape: 'spark',
+        visualKind: 'impact'
       });
     }
 
@@ -259,14 +263,16 @@ export class Projectile {
       const r = this.spec.splashRadius;
       particles.ring(this.x, this.y, {
         color: c, startRadius: 4, endRadius: r,
-        duration: 0.32, thickness: 2.5
+        duration: 0.32, thickness: 2.5,
+        visualKind: 'splash'
       });
       particles.burst(this.x, this.y, {
         count: 8, color: c,
         speedMin: 65, speedMax: 200,
         sizeMin: 1.2, sizeMax: 2.5,
         lifeMin: 0.2, lifeMax: 0.4,
-        drag: 3, shape: 'spark'
+        drag: 3, shape: 'spark',
+        visualKind: 'splash'
       });
       for (const e of enemies) {
         if (!e.alive || e === t) continue;
@@ -380,7 +386,8 @@ export class Projectile {
         lifeMin: 0.12,
         lifeMax: 0.24,
         drag: 4,
-        shape: 'spark'
+        shape: 'spark',
+        visualKind: 'splash'
       });
       onHit(enemy, this.makePacket(enemy, this.spec.splashSparkDamageMul), this);
     }
@@ -397,7 +404,8 @@ export class Projectile {
         speedMin: 0, speedMax: 8,
         sizeMin: 1.2, sizeMax: 2.4,
         lifeMin: 0.18, lifeMax: 0.32,
-        drag: 4, shape: 'circle'
+        drag: 4, shape: 'circle',
+        visualKind: 'trail'
       });
     }
   }

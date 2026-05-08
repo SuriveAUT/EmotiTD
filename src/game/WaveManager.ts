@@ -24,6 +24,8 @@ interface Pending {
 
 const D = EnemyKind.Doubtling;
 const P = EnemyKind.PanicRunner;
+const F = EnemyKind.Fractureling;
+const K = EnemyKind.PressureKnot;
 const G = EnemyKind.GuiltGiant;
 const S = EnemyKind.ShameSwarm;
 const E = EnemyKind.EnvyLeech;
@@ -81,52 +83,85 @@ export function generateWave(number: number, config?: RunConfig): WaveDef {
 
   if (bossWave) {
     const bossKind = bossKindForWave(number, bossFrequency);
+    const endless = number > 30;
+    const firstBoss = number <= 10;
     groups.push(
-      { kind: D, count: 6 + Math.floor(number * 0.45), spacing: Math.max(0.32, density * 0.78), delay: 0, hpScale: hpScale * 0.86 },
-      { kind: bossKind, count: 1, spacing: 1, delay: 4, hpScale: bossHpScaleFor(number) },
-      { kind: S, count: 8 + Math.floor(number * 0.36), spacing: Math.max(0.18, density * 0.38), delay: 10, hpScale: hpScale * 0.72 }
+      { kind: D, count: endless ? 6 + Math.floor(number * 0.12) : firstBoss ? 5 + Math.floor(number * 0.22) : 6 + Math.floor(number * 0.45), spacing: Math.max(0.36, density * 0.9), delay: 0, hpScale: hpScale * (endless ? 1.05 : firstBoss ? 0.62 : 0.86) },
+      { kind: bossKind, count: 1, spacing: 1, delay: 5, hpScale: bossHpScaleFor(number) * (firstBoss ? 0.66 : 1) },
+      ...(firstBoss ? [{ kind: F, count: 3, spacing: 2.3, delay: 7, hpScale: hpScale * 0.72 }] : []),
+      { kind: S, count: endless ? 8 + Math.floor(number * 0.13) : firstBoss ? 4 + Math.floor(number * 0.18) : 8 + Math.floor(number * 0.36), spacing: Math.max(0.22, density * 0.52), delay: firstBoss ? 13 : 10, hpScale: hpScale * (endless ? 0.9 : firstBoss ? 0.52 : 0.72) }
     );
+    if (!endless && number >= 20) groups.push({ kind: K, count: 2 + Math.floor(number / 14), spacing: 3.4, delay: 8.5, hpScale: hpScale * 0.86 });
     if (number >= 20) groups.push({ kind: V, count: 1 + Math.floor(number / 20), spacing: 3.0, delay: 7, hpScale: hpScale * 0.78 });
     if (number >= 30) groups.push({ kind: O, count: 1 + Math.floor(number / 30), spacing: 4.2, delay: 12, hpScale: hpScale * 0.92 });
     if (number >= 30) groups.push({ kind: E, count: 2 + Math.floor(number / 18), spacing: 2.4, delay: 14, hpScale });
     if (number >= 40) groups.push({ kind: N, count: 3 + Math.floor(number / 18), spacing: 1.7, delay: 16, hpScale: hpScale * 0.88 });
   } else {
-    groups.push({ kind: D, count: 5 + Math.floor(number * 1.1), spacing: Math.max(0.36, density), delay: 0, hpScale });
+    groups.push({ kind: D, count: number > 30 ? 8 + Math.floor(number * 0.16) : 5 + Math.floor(number * 1.1), spacing: Math.max(0.36, density), delay: 0, hpScale: number > 30 ? hpScale * 1.1 : hpScale });
 
     if (number >= 3) {
       groups.push({ kind: P, count: 1 + Math.floor(number * 0.38), spacing: Math.max(0.46, density * 0.95), delay: 3.5, hpScale: hpScale * 0.86 });
     }
-    if (number >= 5) {
-      groups.push({ kind: G, count: 1 + Math.floor(number / 7), spacing: 3.2, delay: 6, hpScale });
+    if (number >= 6) {
+      groups.push({ kind: F, count: number > 30 ? 4 + Math.floor((number - 30) / 12) : number <= 12 ? 1 + Math.floor((number - 6) / 3) : 3 + Math.floor((number - 12) / 5), spacing: 2.1, delay: 5.8, hpScale: number > 30 ? hpScale * 1.02 : number <= 12 ? hpScale * 0.78 : hpScale * 0.9 });
+    }
+    if (number >= 9) {
+      groups.push({ kind: K, count: number > 30 ? 2 + Math.floor((number - 30) / 16) : number <= 13 ? 1 : 1 + Math.floor((number - 9) / 6), spacing: 3.6, delay: 7.2, hpScale: number > 30 ? hpScale * 1.03 : number <= 13 ? hpScale * 0.82 : hpScale * 0.95 });
+    }
+    if (number >= 8) {
+      groups.push({ kind: G, count: number > 30 ? 3 + Math.floor((number - 30) / 14) : number <= 12 ? 1 : 1 + Math.floor(number / 7), spacing: 3.2, delay: number <= 12 ? 8 : 6, hpScale: number > 30 ? hpScale * 1.08 : number <= 12 ? hpScale * 0.82 : hpScale });
     }
     if (number >= 7) {
-      groups.push({ kind: S, count: 5 + Math.floor(number * 0.6), spacing: Math.max(0.18, density * 0.42), delay: 8, hpScale: hpScale * 0.7 });
+      groups.push({ kind: S, count: number <= 12 ? 3 + Math.floor(number * 0.35) : 5 + Math.floor(number * 0.6), spacing: Math.max(0.18, density * 0.42), delay: 8, hpScale: hpScale * (number <= 12 ? 0.62 : 0.7) });
     }
-    if (number >= 6) {
-      groups.push({ kind: E, count: 1 + Math.floor(number / 9), spacing: 2.4, delay: 5.5, hpScale: hpScale * 0.88 });
+    if (number >= 8) {
+      groups.push({ kind: E, count: number <= 12 ? 1 : 1 + Math.floor(number / 9), spacing: 2.4, delay: number <= 12 ? 10.5 : 5.5, hpScale: hpScale * (number <= 12 ? 0.78 : 0.88) });
     }
-    if (number >= 10) {
-      groups.push({ kind: B, count: 1 + Math.floor(number / 9), spacing: 3.4, delay: 9, hpScale });
+    if (number >= 13) {
+      groups.push({ kind: B, count: number > 30 ? 3 + Math.floor((number - 30) / 13) : 1 + Math.floor(number / 9), spacing: 3.4, delay: 9, hpScale: number > 30 ? hpScale * 1.08 : hpScale });
     }
     if (number >= 14) {
-      groups.push({ kind: V, count: 2 + Math.floor(number / 10), spacing: 1.8, delay: 4.5, hpScale: hpScale * 0.85 });
+      groups.push({ kind: V, count: number > 30 ? 3 + Math.floor((number - 30) / 16) : 2 + Math.floor(number / 10), spacing: 1.8, delay: 4.5, hpScale: hpScale * (number > 30 ? 1.0 : 0.85) });
     }
     if (number >= 18) {
-      groups.push({ kind: O, count: 1 + Math.floor((number - 18) / 7), spacing: 4.0, delay: 7.5, hpScale: hpScale * 0.95 });
+      groups.push({ kind: O, count: number > 30 ? 2 + Math.floor((number - 30) / 18) : 1 + Math.floor((number - 18) / 7), spacing: 4.0, delay: 7.5, hpScale: hpScale * (number > 30 ? 1.08 : 0.95) });
     }
     if (number >= 22) {
-      groups.push({ kind: N, count: 2 + Math.floor((number - 22) / 5), spacing: Math.max(0.7, density * 1.25), delay: 6.5, hpScale: hpScale * 0.9 });
+      groups.push({ kind: N, count: number > 30 ? 2 + Math.floor((number - 30) / 12) : 2 + Math.floor((number - 22) / 5), spacing: Math.max(0.7, density * 1.25), delay: 6.5, hpScale: hpScale * (number > 30 ? 1.02 : 0.9) });
     }
   }
 
   const def: WaveDef = {
     number,
-    groups: applyConfigToGroups(groups, config).sort((a, b) => a.delay - b.delay),
+    groups: capEndlessGroups(applyConfigToGroups(groups, config), number, bossWave, config).sort((a, b) => a.delay - b.delay),
     isBoss: bossWave,
-    bonusMemory: applyWaveBonusModifier(bossWave ? 38 + Math.floor(number * 2.1) : number % 5 === 0 ? 10 + Math.floor(number * 0.8) : undefined, config)
+    bonusMemory: applyWaveBonusModifier(bossWave ? 38 + Math.floor(number * 2.1) + earlyBossBonus(number, config) : number % 5 === 0 ? 10 + Math.floor(number * 0.8) : undefined, config)
   };
   if (useCache) previewCache.set(number, def);
   return def;
+}
+
+function capEndlessGroups(groups: SpawnGroup[], number: number, bossWave: boolean, config?: RunConfig): SpawnGroup[] {
+  if (number <= 30) return groups;
+  void bossWave;
+  const maxTotal = config?.mode === 'bossRush'
+    ? 65
+    : number >= 81
+      ? 70
+      : number >= 51
+        ? 80
+        : 90;
+  const maxDoubtlings = Math.max(4, Math.floor(maxTotal * (number >= 81 ? 0.2 : number >= 51 ? 0.3 : 0.42)));
+  let used = 0;
+  return groups.map((group) => {
+    const isBoss = group.kind === X || group.kind === M || group.kind === R;
+    if (isBoss) return group;
+    const remaining = Math.max(0, maxTotal - used);
+    const kindCap = group.kind === D ? maxDoubtlings : remaining;
+    const count = Math.min(group.count, remaining, kindCap);
+    used += count;
+    return { ...group, count };
+  }).filter((group) => group.count > 0);
 }
 
 function applyConfigToGroups(groups: SpawnGroup[], config?: RunConfig): SpawnGroup[] {
@@ -145,6 +180,13 @@ function applyConfigToGroups(groups: SpawnGroup[], config?: RunConfig): SpawnGro
 function applyWaveBonusModifier(value: number | undefined, config?: RunConfig): number | undefined {
   if (value === undefined) return undefined;
   return Math.max(0, Math.floor(value * (config?.waveBonusModifier ?? 1)));
+}
+
+function earlyBossBonus(number: number, config?: RunConfig): number {
+  if (config && config.mode !== 'standard') return 0;
+  if (number === 10) return 10;
+  if (number === 20) return 15;
+  return 0;
 }
 
 export class WaveManager {
@@ -208,6 +250,12 @@ export class WaveManager {
       out.push(this.queue.shift()!);
     }
     return out;
+  }
+
+  deferSpawn(pending: Pending, delay = 0.35): void {
+    if (!this.active) return;
+    this.queue.push({ ...pending, at: this.elapsed + delay });
+    this.queue.sort((a, b) => a.at - b.at);
   }
 
   isSpawningDone(): boolean {

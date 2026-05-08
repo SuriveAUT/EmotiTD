@@ -17,6 +17,8 @@ export interface EnemyStats {
 export const ENEMY_STATS: Record<EnemyKind, EnemyStats> = {
   [EnemyKind.Doubtling]:   { hp:  34, speed:  88, bounty:  2, damage: 1, radius: 11, label: 'Doubtling', slowResist: 0, stunResist: 0 },
   [EnemyKind.PanicRunner]: { hp:  46, speed: 152, bounty:  3, damage: 1, radius: 10, label: 'Panic Runner', slowResist: 0.25, stunResist: 0.20 },
+  [EnemyKind.Fractureling]:{ hp:  92, speed:  78, bounty:  5, damage: 1, radius: 13, label: 'Fractureling', slowResist: 0.05, stunResist: 0.05 },
+  [EnemyKind.PressureKnot]:{ hp: 145, speed:  54, bounty:  8, damage: 2, radius: 16, label: 'Pressure Knot', slowResist: 0.08, stunResist: 0.12 },
   [EnemyKind.GuiltGiant]:  { hp: 280, speed:  38, bounty: 12, damage: 3, radius: 22, label: 'Guilt Giant', slowResist: 0.10, stunResist: 0.35 },
   [EnemyKind.ShameSwarm]:  { hp:  26, speed:  80, bounty:  1, damage: 1, radius:  9, label: 'Shame Swarm', slowResist: 0, stunResist: 0 },
   [EnemyKind.EnvyLeech]:   { hp:  68, speed:  94, bounty:  5, damage: 1, radius: 12, label: 'Envy Leech', slowResist: 0.15, stunResist: 0.20 },
@@ -37,6 +39,14 @@ export const ENEMY_TRAITS: Record<EnemyKind, string[]> = {
   [EnemyKind.PanicRunner]: [
     'Fast enemy with short panic sprints.',
     'Slows and stuns suppress the sprint.'
+  ],
+  [EnemyKind.Fractureling]: [
+    'Midweight enemy with fair bounty.',
+    'No special tricks, just clean damage pressure.'
+  ],
+  [EnemyKind.PressureKnot]: [
+    'Slow midweight tank before boss waves.',
+    'Worth focusing before it reaches the Core.'
   ],
   [EnemyKind.GuiltGiant]: [
     'High HP, slow movement.',

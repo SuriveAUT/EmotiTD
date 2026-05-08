@@ -1,17 +1,17 @@
-# Known Issues - 0.1.0-alpha
+# Known Issues - 0.1.3-alpha
 
 These are accepted alpha limitations, not blockers for the first public test build.
 
 ## Gameplay
 
 - Balance is still provisional. Some tower/emotion combinations may overperform once players optimize around Resonance.
-- Endless mode uses the same procedural wave rules after Wave 30, so late-wave variety is functional but not final.
-- Boss encounters currently reuse The Spiral as the recurring boss identity.
+- Endless mode has adaptive visual throttling, render caps and compressed spawn density, but waves beyond 100 are still experimental on low-end hardware.
 
 ## Presentation
 
 - Audio hooks are implemented, but final music and SFX assets are not complete.
-- Visual effects have quality settings, but lower-end hardware still needs broader testing.
+- Visual effects now auto-reduce under high load, but lower-end hardware still needs broader testing.
+- Mobile touch placement has a hotfix, but mobile UX is still alpha and needs more device coverage.
 - UI copy is now English-only. Broader localization is not planned for this alpha.
 
 ## Saves

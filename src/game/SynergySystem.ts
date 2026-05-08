@@ -49,6 +49,14 @@ export class SynergySystem {
     return this.active;
   }
 
+  activeSynergiesForTower(tower: { type: EmotionType }): SynergyDef[] {
+    return this.active.filter((synergy) => synergy.emotions.includes(tower.type));
+  }
+
+  getAppliedSynergiesForTower(tower: { type: EmotionType }): SynergyDef[] {
+    return this.active.filter((synergy) => synergy.modifiers[tower.type] !== undefined);
+  }
+
   activeCount(): number {
     return this.active.length;
   }

@@ -11,6 +11,11 @@ export interface DevToolsSnapshot {
   enemies: number;
   towers: number;
   projectiles: number;
+  particles: number;
+  visualSkipRate: number;
+  visualLoadLevel: string;
+  quality: string;
+  contextLostCount: number;
   score: number;
 }
 
@@ -30,6 +35,8 @@ export interface DevToolsCallbacks {
 const ENEMY_KINDS: EnemyKind[] = [
   EnemyKind.Doubtling,
   EnemyKind.PanicRunner,
+  EnemyKind.Fractureling,
+  EnemyKind.PressureKnot,
   EnemyKind.GuiltGiant,
   EnemyKind.ShameSwarm,
   EnemyKind.EnvyLeech,
@@ -37,7 +44,9 @@ const ENEMY_KINDS: EnemyKind[] = [
   EnemyKind.VoidWraith,
   EnemyKind.Overthinker,
   EnemyKind.NumbOne,
-  EnemyKind.Spiral
+  EnemyKind.Spiral,
+  EnemyKind.Mask,
+  EnemyKind.BurnoutBoss
 ];
 
 export class DevToolsOverlay {
@@ -135,7 +144,10 @@ export class DevToolsOverlay {
       `FPS ${Math.round(this.fps)} | Score ${s.score}\n` +
       `Wave ${s.wave} | Memory ${s.memory}\n` +
       `Core ${s.stability}/${s.maxStability}\n` +
-      `Enemies ${s.enemies} | Towers ${s.towers} | Proj ${s.projectiles}`;
+      `Enemies ${s.enemies} | Towers ${s.towers} | Proj ${s.projectiles}\n` +
+      `Particles ${s.particles} | Q ${s.quality} | Lost ${s.contextLostCount}\n` +
+      `Visual ${s.visualLoadLevel} / skip ${s.visualSkipRate}` +
+      (s.visualSkipRate >= 4 ? '\nVisual throttling active' : '');
   }
 
   private setWaveTarget(wave: number): void {

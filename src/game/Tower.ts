@@ -17,6 +17,17 @@ import type { ParticleSystem } from './Particles';
 import { Projectile, type ProjectileSpec } from './Projectile';
 import { TAU, distSq } from './math';
 
+export interface TowerStatBreakdown {
+  damage: {
+    base: number;
+    upgraded: number;
+    final: number;
+    upgradePercent: number;
+    multiplier: number;
+    lines: string[];
+  };
+}
+
 export class Tower {
   readonly type: EmotionType;
   readonly cx: number; readonly cy: number;
@@ -27,6 +38,7 @@ export class Tower {
   private fireRate: number;
   private fireRateMod = 1;     // calm buff applied each frame
   private damageMul = 1;       // resonance bonus
+  private damageBreakdownLines: string[] = [];
   private synergyModifiers: SynergyModifiers = {};
   private supportSuppressedTimer = 0;
   private upgradePath: UpgradePath | null = null;
@@ -47,6 +59,7 @@ export class Tower {
   private aura: Graphics;
   private upgradeFlashTimer = 0;
   private recoilTimer = 0;
+  private simplifiedVisuals = false;
 
   constructor(type: EmotionType, cx: number, cy: number, worldX: number, worldY: number) {
     this.type = type;
@@ -274,7 +287,13 @@ export class Tower {
 
   /* ----------------------- behavior ----------------------- */
 
-  setDamageMul(mul: number) { this.damageMul = mul; }
+  setDamageMul(mul: number, lines: string[] = []) {
+    this.damageMul = mul;
+    this.damageBreakdownLines = lines;
+  }
+  setSimplifiedVisuals(enabled: boolean) {
+    this.simplifiedVisuals = enabled;
+  }
   setSynergyModifiers(modifiers: SynergyModifiers) { this.synergyModifiers = modifiers; }
   suppressSupport(duration: number) {
     this.supportSuppressedTimer = Math.max(this.supportSuppressedTimer, duration);
@@ -330,7 +349,22 @@ export class Tower {
     return this.computeStats().specials;
   }
 
-  applyTowerAuras(towers: Tower[], globalFireRateMul = 1) {
+  getStatBreakdown(): TowerStatBreakdown {
+    const base = TOWER_STATS[this.type].damage;
+    const upgraded = this.getEffectiveStats().damage;
+    return {
+      damage: {
+        base,
+        upgraded,
+        final: upgraded * this.damageMul,
+        upgradePercent: base > 0 ? (upgraded / base - 1) * 100 : 0,
+        multiplier: this.damageMul,
+        lines: [...this.damageBreakdownLines]
+      }
+    };
+  }
+
+  applyTowerAuras(towers: Tower[], globalFireRateMul = 1, supportEffectMul = 1) {
     let mult = globalFireRateMul;
     for (const t of towers) {
       if (t === this) continue;
@@ -339,7 +373,7 @@ export class Tower {
       const stats = t.getEffectiveStats();
       const r = stats.buffRadius ?? 0;
       if (distSq({ x: t.x, y: t.y }, { x: this.x, y: this.y }) <= r * r) {
-        mult *= this.supportFireRateMul(stats.buffFireRate ?? 1, 0.65);
+        mult *= this.scaleSupportFireRate(stats.buffFireRate ?? 1, supportEffectMul, 0.65);
       }
     }
     for (const t of towers) {
@@ -348,7 +382,7 @@ export class Tower {
       const r = stats.loveLinkRadius ?? 0;
       if (r <= 0 || !stats.synergies.includes(this.type)) continue;
       if (distSq({ x: t.x, y: t.y }, { x: this.x, y: this.y }) <= r * r) {
-        mult *= this.supportFireRateMul(stats.loveFireRateMul ?? 1, 0.70);
+        mult *= this.scaleSupportFireRate(stats.loveFireRateMul ?? 1, supportEffectMul, 0.70);
       }
     }
     this.fireRateMod = mult;
@@ -357,6 +391,11 @@ export class Tower {
   private supportFireRateMul(rawMul: number, ccScale: number): number {
     if (this.type !== EmotionType.Fear && this.type !== EmotionType.Sadness) return rawMul;
     return 1 - ((1 - rawMul) * ccScale);
+  }
+
+  private scaleSupportFireRate(rawMul: number, supportEffectMul: number, ccScale: number): number {
+    const scaled = 1 - ((1 - rawMul) * supportEffectMul);
+    return this.supportFireRateMul(scaled, ccScale);
   }
 
   loveDamageMulFrom(towers: Tower[]): number {
@@ -389,11 +428,13 @@ export class Tower {
       this.supportSuppressedTimer = Math.max(0, this.supportSuppressedTimer - dt);
     }
     this.aura.clear();
-    this.drawIdleSignature();
+    if (!this.simplifiedVisuals || this.selected || this.hovered || this.upgradeFlashTimer > 0) {
+      this.drawIdleSignature();
+    }
     if (this.supportSuppressedTimer > 0) {
       this.aura.rect(-15, -15, 30, 30).stroke({ color: 0x77ffaa, width: 1.5, alpha: 0.65 });
       this.aura.rect(-9, -9, 18, 18).stroke({ color: 0x05070d, width: 2, alpha: 0.8 });
-    } else if (this.type === EmotionType.Calm) {
+    } else if (this.type === EmotionType.Calm && (!this.simplifiedVisuals || this.selected || this.hovered)) {
       const a = 0.18 + 0.12 * Math.sin(this.auraTime * 2.4);
       this.aura.circle(0, 0, 22 + Math.sin(this.auraTime * 2.4) * 2).fill({ color: EMOTION_COLOR[this.type], alpha: a * 0.4 });
       this.aura.circle(0, 0, 13).fill({ color: EMOTION_COLOR[this.type], alpha: a });

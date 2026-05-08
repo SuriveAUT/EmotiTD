@@ -2,6 +2,59 @@
 
 All notable changes to EMOTICORE TD are documented here. Format follows Keep a Changelog, versioning follows SemVer.
 
+## [0.1.3-alpha] - 2026-05-08
+
+### Changed
+
+- Compressed Endless trashmob scaling after Wave 30 so late runs lean more on elites and boss pressure instead of Doubtling mass.
+- Added stricter max simultaneous enemy caps with spawn queue backpressure instead of dropping queued spawns.
+- Reworked Emotional Balance into weighted influence by emotion/category, including Stable, Tense, Imbalanced and Overloaded states.
+- Added dominant emotion/category consequences plus small Resonance rewards for mixed builds.
+- Reduced range/aura/synergy visual clutter by simplifying unselected towers under high tower counts/load and limiting selected synergy lines.
+
+### Fixed
+
+- Version now reports `0.1.3-alpha` in the main menu, package metadata and run summary exports.
+- Boss waves continue rotating every 10 waves through Endless and boss spawns are no longer blocked by enemy caps.
+- RunStats now tracks balance state time, max imbalance state and dominant emotion/category at run end.
+- Hotfix: softened early Standard waves after live feedback by delaying and reducing first large enemy pressure without changing economy or tower values.
+- Hotfix: reduced Wave 10 Spiral HP/add pressure so the first boss is a learnable check instead of a hard wall.
+- Hotfix: added Fractureling and Pressure Knot as mid-tier enemies to smooth Waves 6-20 and provide fairer Memory before boss checks.
+
+## [0.1.2-alpha] - 2026-05-07
+
+### Fixed
+
+- Added WebGL context lost/restored detection with emergency visual cleanup and UI refresh.
+- Added hard caps for particles, projectile visuals, floating combat text, ground effects and simultaneous enemies.
+- Added adaptive visual throttling for late waves so hit/trail/impact/death cosmetics are skipped under high load without changing gameplay damage.
+- Fixed boss spawns after Wave 30 being blocked by the simultaneous-enemy safety cap, which caused BossKills to undercount in Endless.
+- Fixed a SidePanel text cleanup leak by destroying removed text/graphics children during rebuilds.
+- Prevented HUD synergy chips from rebuilding text every frame when the active synergy list is unchanged.
+- Reduced late Endless render pressure with stricter Wave 31+ spawn caps and high-load quality fallback.
+
+### Improved
+
+- Added DEV late-wave performance counters for enemies, projectiles, particles, effects, UI children and FPS.
+- Added panic recovery that clears visual-only effects and temporarily lowers quality when FPS/load becomes unsafe.
+- Tower SidePanel stats now show a compact damage breakdown with base, upgraded, final multiplier and relevant synergy/support bonus labels.
+- DevTools now shows visual skip rate, visual load level, quality and WebGL context loss count.
+
+## [0.1.1-alpha] - 2026-05-07
+
+### Fixed
+
+- Fixed top HUD text overlap by moving synergy chips out of the right status text area and wrapping long status messages.
+- Fixed upgrade card readability with taller cards, wrapped descriptions and dynamic max-level labels.
+- Improved Endless stability past Wave 40 with late-wave spawn caps, projectile safety cleanup and DEV-only high-load diagnostics.
+- Clarified run leave flow with Save & Quit plus confirmed Abandon Run.
+
+### Improved
+
+- Active synergies now show concrete bonus labels in HUD/SidePanel instead of only names.
+- SidePanel selected-tower view now focuses synergy badges on bonuses relevant to that tower.
+- Map grid visuals are less generic: fractured layouts are irregular and Panic Circuit uses broken glitch segments.
+
 ## [0.1.0-alpha] - 2026-05-07
 
 First playable alpha. The core loop is ready for release validation.

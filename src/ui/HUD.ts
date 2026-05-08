@@ -1,4 +1,4 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, FederatedPointerEvent, Graphics, Text } from 'pixi.js';
 import { CANVAS, COLORS, ECONOMY, EMOTION_COLOR, HUD_COPY } from '../game/config';
 import { EMOTION_TYPES } from '../game/types';
 import type { EmotionalBalance } from '../game/EmotionalBalance';
@@ -18,7 +18,7 @@ export interface HUDState {
   autoStartEnabled: boolean;
   balanceDisruption: number;
   synergyStatus: string;
-  synergyBadges?: Array<{ label: string; color: number }>;
+  synergyBadges?: Array<{ label: string; detail?: string; color: number }>;
   bossWave?: boolean;
   notice: string;
 }
@@ -50,12 +50,16 @@ export class HUD {
   private statusLabel: Text;
   private statusText: Text;
   private synergyChips: Container;
+  private synergyTooltip: Container;
+  private synergyTooltipBg: Graphics;
+  private synergyTooltipText: Text;
   private displayedStability = 0;
   private displayedMemory = 0;
   private displayedScore = 0;
   private pulseTime = 0;
   private lastStability = 0;
   private damageFlash = 0;
+  private synergyBadgeKey = '';
 
   constructor() {
     this.container = new Container();
@@ -114,16 +118,40 @@ export class HUD {
     this.container.addChild(this.balanceValue);
 
     this.synergyChips = new Container();
-    this.synergyChips.position.set(COL.balance + 210, 28);
+    this.synergyChips.position.set(COL.balance + 220, 58);
+    this.synergyChips.eventMode = 'static';
+    this.synergyChips.cursor = 'help';
+    this.synergyChips.on('pointerover', () => this.showSynergyTooltip());
+    this.synergyChips.on('pointerout', () => this.hideSynergyTooltip());
+    this.synergyChips.on('pointertap', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.synergyTooltip.visible = !this.synergyTooltip.visible;
+    });
     this.container.addChild(this.synergyChips);
+
+    this.synergyTooltip = new Container();
+    this.synergyTooltip.visible = false;
+    this.synergyTooltip.eventMode = 'none';
+    this.synergyTooltipBg = new Graphics();
+    this.synergyTooltipText = makeText('', {
+      fontSize: 10,
+      fill: 0xe8edf2,
+      wordWrap: true,
+      wordWrapWidth: CANVAS.rightPanelWidth - 28,
+      lineHeight: 14
+    });
+    this.synergyTooltipText.position.set(10, 8);
+    this.synergyTooltip.position.set(CANVAS.width - CANVAS.rightPanelWidth + 8, CANVAS.hudHeight + 10);
+    this.synergyTooltip.addChild(this.synergyTooltipBg, this.synergyTooltipText);
+    this.container.addChild(this.synergyTooltip);
 
     this.statusLabel = makeLabel(HUD_COPY.status, { fontSize: 9, letterSpacing: 2 });
     this.statusLabel.anchor.set(1, 0);
     this.statusLabel.position.set(COL.status, 10);
     this.container.addChild(this.statusLabel);
 
-    this.statusText = makeText('', { fontSize: 11, letterSpacing: 1, fill: 0x6cf0ff, fontWeight: '700' });
-    this.statusText.position.set(0, 28);
+    this.statusText = makeText('', { fontSize: 10, letterSpacing: 0, fill: 0x6cf0ff, fontWeight: '700', align: 'right', wordWrap: true, wordWrapWidth: 230, lineHeight: 12 });
+    this.statusText.position.set(0, 27);
     this.statusText.anchor.set(1, 0);
     this.statusText.x = COL.status;
     this.container.addChild(this.statusText);
@@ -178,23 +206,13 @@ export class HUD {
     this.waveValue.style.fill = state.bossWave ? UI_THEME.color.danger : 0x6cf0ff;
 
     this.drawBalanceDots(balance);
-    if (balance.isResonating()) {
-      this.balanceValue.text = state.synergyStatus === HUD_COPY.noSynergy
-        ? HUD_COPY.resonance
-        : `${HUD_COPY.resonance} / ${state.synergyStatus}`;
-      this.balanceValue.style.fill = 0x77ffaa;
-    } else if (balance.dominant()) {
-      this.balanceValue.text = state.synergyStatus === HUD_COPY.noSynergy
-        ? HUD_COPY.imbalance
-        : `${HUD_COPY.imbalance} / ${state.synergyStatus}`;
-      this.balanceValue.style.fill = 0xff5577;
-    } else if (balance.totalTowers() === 0) {
-      this.balanceValue.text = HUD_COPY.neutral;
-      this.balanceValue.style.fill = 0x7d8ba6;
-    } else {
-      this.balanceValue.text = state.synergyStatus === HUD_COPY.noSynergy ? HUD_COPY.building : state.synergyStatus;
-      this.balanceValue.style.fill = state.synergyStatus === HUD_COPY.noSynergy ? 0xffd166 : 0x77ffaa;
-    }
+    const balanceState = balance.analysis().state;
+    this.balanceValue.text = balance.statusText();
+    this.balanceValue.style.fill =
+      balanceState === 'overloaded' ? 0xff5577 :
+      balanceState === 'imbalanced' ? 0xff8a4d :
+      balanceState === 'tense' ? 0xffd166 :
+      balance.isResonating() ? 0x77ffaa : 0x7d8ba6;
     this.drawSynergyChips(state.synergyBadges ?? []);
 
     if (state.paused) {
@@ -224,6 +242,7 @@ export class HUD {
     const g = this.balanceDots;
     g.clear();
     let x = 0;
+    const analysis = balance.analysis();
     for (const t of EMOTION_TYPES) {
       const n = balance.counts[t];
       const c = EMOTION_COLOR[t];
@@ -231,34 +250,89 @@ export class HUD {
       if (n > 0) {
         g.circle(x, 0, 8.5).stroke({ color: c, width: 1, alpha: 0.5 });
       }
+      if (analysis.dominantEmotion === t && analysis.state !== 'stable') {
+        const alpha = analysis.state === 'overloaded' ? 0.95 : 0.7;
+        g.circle(x, 0, 11).stroke({ color: analysis.state === 'tense' ? 0xffd166 : 0xff5577, width: 2, alpha });
+      }
       x += 18;
     }
   }
 
-  private drawSynergyChips(badges: Array<{ label: string; color: number }>): void {
+  private drawSynergyChips(badges: Array<{ label: string; detail?: string; color: number }>): void {
+    const key = badges.map((badge) => `${badge.label}:${badge.detail ?? ''}:${badge.color}`).join('|');
+    if (key === this.synergyBadgeKey) return;
+    this.synergyBadgeKey = key;
     this.synergyChips.removeChildren().forEach((child) => child.destroy({ children: true }));
-    const max = 5;
+    if (badges.length === 0) {
+      this.synergyTooltip.visible = false;
+      return;
+    }
+    const max = 4;
     let x = 0;
     badges.slice(0, max).forEach((badge) => {
       const chip = new Container();
       const bg = new Graphics();
-      const label = makeText(badge.label, { fontSize: 8, fontWeight: '800', letterSpacing: 1, fill: UI_THEME.color.text });
-      const w = Math.min(86, Math.max(34, (label.width as number) + 14));
-      bg.roundRect(0, 0, w, 18, 6)
+      const labelText = this.compactSynergyLabel(badge.label);
+      const label = makeText(labelText, { fontSize: 8, fontWeight: '800', letterSpacing: 0, fill: UI_THEME.color.text });
+      const w = Math.min(68, Math.max(42, (label.width as number) + 12));
+      bg.roundRect(0, 0, w, 14, 5)
         .fill({ color: UI_THEME.color.panelSoft, alpha: 0.92 })
         .stroke({ color: badge.color, width: 1, alpha: 0.88 });
-      bg.rect(5, 15, w - 10, 1).fill({ color: badge.color, alpha: 0.5 });
+      bg.rect(5, 12, w - 10, 1).fill({ color: badge.color, alpha: 0.5 });
       label.anchor.set(0.5);
-      label.position.set(w / 2, 9);
+      label.position.set(w / 2, 7);
       chip.position.set(x, 0);
       chip.addChild(bg, label);
       this.synergyChips.addChild(chip);
-      x += w + 6;
+      x += w + 5;
     });
     if (badges.length > max) {
       const more = makeText(`+${badges.length - max}`, { fontSize: 9, fontWeight: '800', fill: UI_THEME.color.warn });
       more.position.set(x, 3);
       this.synergyChips.addChild(more);
     }
+    this.updateSynergyTooltip(badges);
+  }
+
+  private compactSynergyLabel(label: string): string {
+    return label
+      .replace('RADIANT ', '')
+      .replace('BRIGHT ', '')
+      .replace('DEEP ', '')
+      .replace('QUIET ', '')
+      .replace('SECURE ', '')
+      .replace('SOCIAL ', '')
+      .slice(0, 10);
+  }
+
+  private updateSynergyTooltip(badges: Array<{ label: string; detail?: string; color: number }>): void {
+    const lines = badges.slice(0, 8).map((badge) => {
+      return badge.detail ? `${badge.label}: ${badge.detail}` : badge.label;
+    });
+    if (badges.length > 8) lines.push(`+${badges.length - 8} more active synergies`);
+    this.synergyTooltipText.text = lines.join('\n');
+    const width = CANVAS.rightPanelWidth - 16;
+    const height = Math.max(34, (this.synergyTooltipText.height as number) + 16);
+    this.synergyTooltipBg.clear();
+    this.synergyTooltipBg.roundRect(0, 0, width, height, 8)
+      .fill({ color: 0x05070d, alpha: 0.98 })
+      .stroke({ color: 0x6cf0ff, width: 1.5, alpha: 0.9 });
+    this.synergyTooltipBg.rect(10, 0, width - 20, 2).fill({ color: 0x77ffaa, alpha: 0.65 });
+  }
+
+  private showSynergyTooltip(): void {
+    if (this.synergyChips.children.length === 0) return;
+    this.synergyTooltip.visible = true;
+  }
+
+  private hideSynergyTooltip(): void {
+    this.synergyTooltip.visible = false;
+  }
+
+  forceRebuild(): void {
+    this.synergyBadgeKey = '';
+    this.drawBg();
+    this.synergyChips.removeChildren().forEach((child) => child.destroy({ children: true }));
+    this.synergyTooltip.visible = false;
   }
 }

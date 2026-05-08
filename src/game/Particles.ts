@@ -1,5 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import type { QualitySetting } from '../core/SaveManager';
+import { getRenderCaps, type RenderCaps } from '../core/renderQuality';
+import type { VisualBudget, VisualEffectKind } from '../core/VisualBudget';
 import { rand, TAU } from './math';
 
 type Shape = 'circle' | 'square' | 'spark' | 'shard';
@@ -20,6 +22,8 @@ interface BurstOpts {
   baseAngle?: number;  // center angle if spread < TAU
   fadeIn?: number;     // 0..1 portion of life spent fading in
   spin?: number;       // rotational velocity
+  visualKind?: VisualEffectKind;
+  important?: boolean;
 }
 
 interface RingOpts {
@@ -29,6 +33,8 @@ interface RingOpts {
   duration: number;
   thickness: number;
   alpha?: number;
+  visualKind?: VisualEffectKind;
+  important?: boolean;
 }
 
 class Particle {
@@ -165,6 +171,9 @@ export class ParticleSystem {
   private rings: Ring[] = [];
   private ringPool: Ring[] = [];
   private quality: QualitySetting = 'medium';
+  private caps: RenderCaps = getRenderCaps('medium');
+  private suspended = false;
+  private budget: VisualBudget | null = null;
 
   constructor() {
     this.container = new Container();
@@ -175,11 +184,48 @@ export class ParticleSystem {
 
   setQuality(quality: QualitySetting): void {
     this.quality = quality;
+    this.caps = getRenderCaps(quality);
+    this.trimToCaps();
+  }
+
+  setSuspended(suspended: boolean): void {
+    this.suspended = suspended;
+  }
+
+  setVisualBudget(budget: VisualBudget): void {
+    this.budget = budget;
+  }
+
+  counts(): { particles: number; rings: number } {
+    return { particles: this.active.length, rings: this.rings.length };
+  }
+
+  clearVisuals(): void {
+    for (const p of this.active) {
+      p.g.visible = false;
+      this.container.removeChild(p.g);
+      this.pool.push(p);
+    }
+    for (const r of this.rings) {
+      r.g.visible = false;
+      r.g.clear();
+      this.container.removeChild(r.g);
+      this.ringPool.push(r);
+    }
+    this.active = [];
+    this.rings = [];
   }
 
   burst(x: number, y: number, opts: BurstOpts) {
+    if (this.suspended) return;
+    if (this.active.length >= this.caps.maxParticles) {
+      if (!opts.important) return;
+      this.dropOldestParticle();
+    }
+    if (this.budget && !this.budget.shouldRender(opts.visualKind ?? 'hit', opts.important)) return;
     const qualityMul = this.quality === 'low' ? 0.45 : this.quality === 'high' ? 1.35 : 1;
-    const count = Math.max(opts.count > 0 ? 1 : 0, Math.round(opts.count * qualityMul));
+    const available = Math.max(0, this.caps.maxParticles - this.active.length);
+    const count = Math.min(available, Math.max(opts.count > 0 ? 1 : 0, Math.round(opts.count * qualityMul)));
     const spread = opts.spread ?? TAU;
     const base = opts.baseAngle ?? 0;
     for (let i = 0; i < count; i++) {
@@ -193,6 +239,7 @@ export class ParticleSystem {
   }
 
   trail(x: number, y: number, color: number, size = 2) {
+    if (this.budget && !this.budget.shouldRender('trail')) return;
     this.burst(x, y, {
       count: 1,
       color,
@@ -200,11 +247,18 @@ export class ParticleSystem {
       sizeMin: size * 0.6, sizeMax: size,
       lifeMin: 0.18, lifeMax: 0.32,
       drag: 2,
-      shape: 'circle'
+      shape: 'circle',
+      visualKind: 'trail'
     });
   }
 
   ring(x: number, y: number, opts: RingOpts) {
+    if (this.suspended) return;
+    if (this.rings.length >= this.caps.maxParticleRings) {
+      if (!opts.important) return;
+      this.dropOldestRing();
+    }
+    if (this.budget && !this.budget.shouldRender(opts.visualKind ?? 'impact', opts.important)) return;
     if (this.quality === 'low' && opts.duration < 0.35 && opts.endRadius < 70) return;
     const r = this.ringPool.pop() ?? new Ring();
     r.reset(x, y, opts);
@@ -232,5 +286,31 @@ export class ParticleSystem {
         this.ringPool.push(r);
       }
     }
+  }
+
+  private trimToCaps(): void {
+    while (this.active.length > this.caps.maxParticles) {
+      this.dropOldestParticle();
+    }
+    while (this.rings.length > this.caps.maxParticleRings) {
+      this.dropOldestRing();
+    }
+  }
+
+  private dropOldestParticle(): void {
+    const p = this.active.shift();
+    if (!p) return;
+    p.g.visible = false;
+    this.container.removeChild(p.g);
+    this.pool.push(p);
+  }
+
+  private dropOldestRing(): void {
+    const r = this.rings.shift();
+    if (!r) return;
+    r.g.visible = false;
+    r.g.clear();
+    this.container.removeChild(r.g);
+    this.ringPool.push(r);
   }
 }

@@ -56,6 +56,8 @@ export const EMOTION_TYPES: EmotionType[] = [
 export enum EnemyKind {
   Doubtling = 'doubtling',
   PanicRunner = 'panic',
+  Fractureling = 'fractureling',
+  PressureKnot = 'pressure_knot',
   GuiltGiant = 'guilt',
   ShameSwarm = 'shame',
   EnvyLeech = 'envy',

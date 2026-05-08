@@ -24,6 +24,15 @@ async function main() {
   app.canvas.style.touchAction = 'none';
   app.canvas.style.userSelect = 'none';
   app.canvas.style.webkitUserSelect = 'none';
+  app.canvas.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    console.error('[EMOTICORE TD] WebGL context lost');
+    window.dispatchEvent(new CustomEvent('emoticore:renderer-context-lost'));
+  });
+  app.canvas.addEventListener('webglcontextrestored', () => {
+    console.warn('[EMOTICORE TD] WebGL context restored');
+    window.dispatchEvent(new CustomEvent('emoticore:renderer-context-restored'));
+  });
 
   const fit = () => {
     const viewport = window.visualViewport;
