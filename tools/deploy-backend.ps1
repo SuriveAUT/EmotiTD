@@ -2,8 +2,8 @@ param(
   [string]$SshHost = "server",
   [string]$RemoteDir = "/var/www/emoticore-td-server",
   [string]$AppName = "emoticore-scoreboard",
-  [string]$AllowedOrigin = "http://fersd.com",
-  [int]$Port = 3001
+  [string]$AllowedOrigin = "https://fersd.com",
+  [int]$Port = 3010
 )
 
 $ErrorActionPreference = "Stop"
