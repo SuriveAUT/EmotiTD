@@ -1861,6 +1861,9 @@ export class Game {
   }
 
   private continueEndless() {
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = null;
+    this.scoreSubmittedForRun = false;
     this.mode = 'endless';
     this.waves.setMaxWave(null);
     this.state.victory = false;
