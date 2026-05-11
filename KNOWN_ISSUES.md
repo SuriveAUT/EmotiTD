@@ -1,4 +1,4 @@
-# Known Issues - 0.1.3-alpha
+# Known Issues - 0.1.4-alpha
 
 These are accepted alpha limitations, not blockers for the first public test build.
 
@@ -11,7 +11,7 @@ These are accepted alpha limitations, not blockers for the first public test bui
 
 - Audio hooks are implemented, but final music and SFX assets are not complete.
 - Visual effects now auto-reduce under high load, but lower-end hardware still needs broader testing.
-- Mobile touch placement has a hotfix, but mobile UX is still alpha and needs more device coverage.
+- Mobile landscape is the recommended mobile mode. Portrait shows a recommendation overlay and remains limited because the tactical UI is dense.
 - UI copy is now English-only. Broader localization is not planned for this alpha.
 
 ## Saves

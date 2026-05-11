@@ -2,6 +2,23 @@
 
 All notable changes to EMOTICORE TD are documented here. Format follows Keep a Changelog, versioning follows SemVer.
 
+## [0.1.4-alpha] - 2026-05-11
+
+### Changed
+
+- Added a focused UI/UX audit document covering HUD, TowerBar, SidePanel, mobile, hardcoded layout and render-pressure risks.
+- Added a central layout mode helper for desktop, compact, mobile landscape and mobile portrait decisions.
+- Added compact number formatting for dense HUD and run-summary values.
+- Reworked the top HUD into clearer card regions with compact Score/Memory values, reduced synergy clutter and shorter status text.
+- Widened TowerBar cards, increased touch hit areas and added a clear placement/cancel chip while building.
+- Increased SidePanel upgrade-card height and reduced inspector text density so upgrade descriptions no longer feel compressed.
+- Added a mobile portrait recommendation overlay with a continue-anyway option.
+- Reduced high-quality render resolution caps to safer values for long runs and mobile GPUs.
+
+### Notes
+
+- No gameplay balance, tower, enemy, economy, map, boss, audio or backend logic was changed in this UI pass.
+
 ## [0.1.3-alpha] - 2026-05-08
 
 ### Changed

@@ -5,6 +5,7 @@ import { SceneManager } from './core/SceneManager';
 import { saveManager } from './core/SaveManager';
 import { CANVAS } from './game/config';
 import { MainMenuScene } from './scenes/MainMenuScene';
+import { getLayoutMode } from './ui/layoutSystem';
 
 async function main() {
   const initialSave = saveManager.load();
@@ -24,6 +25,13 @@ async function main() {
   app.canvas.style.touchAction = 'none';
   app.canvas.style.userSelect = 'none';
   app.canvas.style.webkitUserSelect = 'none';
+  const rotateHint = document.getElementById('rotate-hint');
+  const rotateDismiss = rotateHint?.querySelector('button');
+  let rotateHintDismissed = false;
+  rotateDismiss?.addEventListener('click', () => {
+    rotateHintDismissed = true;
+    rotateHint?.classList.remove('visible');
+  });
   app.canvas.addEventListener('webglcontextlost', (event) => {
     event.preventDefault();
     console.error('[EMOTICORE TD] WebGL context lost');
@@ -46,6 +54,10 @@ async function main() {
     const scale = Math.min(availableW / CANVAS.width, availableH / CANVAS.height);
     app.canvas.style.width = `${CANVAS.width * scale}px`;
     app.canvas.style.height = `${CANVAS.height * scale}px`;
+    const mode = getLayoutMode(w, h, scale);
+    document.documentElement.dataset.layout = mode;
+    const showRotateHint = mode === 'mobilePortrait' && !rotateHintDismissed;
+    rotateHint?.classList.toggle('visible', showRotateHint);
   };
   const scheduleFit = () => requestAnimationFrame(fit);
   fit();

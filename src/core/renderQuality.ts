@@ -44,8 +44,8 @@ const RENDER_CAPS: Record<QualitySetting, RenderCaps> = {
 
 export function getRenderResolution(quality: QualitySetting, devicePixelRatio = window.devicePixelRatio || 1): number {
   if (quality === 'low') return 1;
-  if (quality === 'medium') return Math.min(2, Math.max(1.5, devicePixelRatio));
-  return Math.min(3, Math.max(2.5, devicePixelRatio));
+  if (quality === 'medium') return Math.min(devicePixelRatio, 1.5);
+  return Math.min(devicePixelRatio, 2);
 }
 
 export function applyRenderResolution(app: Application, quality: QualitySetting): number {

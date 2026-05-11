@@ -5,6 +5,7 @@ import type { EmotionalBalance } from '../game/EmotionalBalance';
 import { makeLabel, makeText, makeHeadline } from './text';
 import { UI_THEME, mixToward } from './theme';
 import { balanceLore } from '../content/lore';
+import { formatCompactNumber } from './format';
 
 export interface HUDState {
   stability: number;
@@ -26,11 +27,11 @@ export interface HUDState {
 
 const COL = {
   stability: 24,
-  memory: 232,
-  score: 332,
-  wave: 432,
-  balance: 512,
-  status: CANVAS.width - CANVAS.rightPanelWidth - 16
+  memory: 242,
+  score: 364,
+  wave: 492,
+  balance: 614,
+  status: CANVAS.width - CANVAS.rightPanelWidth - 22
 } as const;
 
 export class HUD {
@@ -86,7 +87,7 @@ export class HUD {
     this.memoryLabel.position.set(COL.memory, 10);
     this.container.addChild(this.memoryLabel);
 
-    this.memoryValue = makeHeadline(`${ECONOMY.startingMemory}`, { fontSize: 22, fill: 0xffd166 });
+    this.memoryValue = makeHeadline(`${ECONOMY.startingMemory}`, { fontSize: 20, fill: 0xffd166 });
     this.memoryValue.position.set(COL.memory, 24);
     this.container.addChild(this.memoryValue);
 
@@ -94,7 +95,7 @@ export class HUD {
     this.scoreLabel.position.set(COL.score, 10);
     this.container.addChild(this.scoreLabel);
 
-    this.scoreValue = makeHeadline('0', { fontSize: 18, fill: 0x77ffaa });
+    this.scoreValue = makeHeadline('0', { fontSize: 17, fill: 0x77ffaa });
     this.scoreValue.position.set(COL.score, 26);
     this.container.addChild(this.scoreValue);
 
@@ -119,7 +120,7 @@ export class HUD {
     this.container.addChild(this.balanceValue);
 
     this.synergyChips = new Container();
-    this.synergyChips.position.set(COL.balance + 220, 58);
+    this.synergyChips.position.set(COL.balance + 92, 44);
     this.synergyChips.eventMode = 'static';
     this.synergyChips.cursor = 'help';
     this.synergyChips.on('pointerover', () => this.showSynergyTooltip());
@@ -151,7 +152,7 @@ export class HUD {
     this.statusLabel.position.set(COL.status, 10);
     this.container.addChild(this.statusLabel);
 
-    this.statusText = makeText('', { fontSize: 10, letterSpacing: 0, fill: 0x6cf0ff, fontWeight: '700', align: 'right', wordWrap: true, wordWrapWidth: 230, lineHeight: 12 });
+    this.statusText = makeText('', { fontSize: 10, letterSpacing: 0, fill: 0x6cf0ff, fontWeight: '700', align: 'right', wordWrap: true, wordWrapWidth: 86, lineHeight: 12 });
     this.statusText.position.set(0, 27);
     this.statusText.anchor.set(1, 0);
     this.statusText.x = COL.status;
@@ -168,9 +169,20 @@ export class HUD {
     g.rect(0, CANVAS.hudHeight - 2, CANVAS.width, 1)
       .fill({ color: 0x6cf0ff, alpha: 0.18 });
 
-    for (const x of [COL.memory - 14, COL.score - 12, COL.wave - 12, COL.balance - 14]) {
-      g.rect(x, 12, 1, CANVAS.hudHeight - 20).fill({ color: COLORS.panelEdge, alpha: 0.55 });
-    }
+    this.drawHudCard(g, 14, 7, 202, 50, 0x77ffaa);
+    this.drawHudCard(g, 228, 7, 108, 50, 0xffd166);
+    this.drawHudCard(g, 350, 7, 118, 50, 0x77ffaa);
+    this.drawHudCard(g, 478, 7, 106, 50, 0x6cf0ff);
+    this.drawHudCard(g, 600, 7, 302, 50, 0xb070ff);
+    this.drawHudCard(g, 914, 7, 70, 50, 0x6cf0ff);
+  }
+
+  private drawHudCard(g: Graphics, x: number, y: number, width: number, height: number, accent: number): void {
+    g.roundRect(x, y, width, height, 8)
+      .fill({ color: 0x080d18, alpha: 0.72 })
+      .stroke({ color: COLORS.panelEdge, width: 1, alpha: 0.68 });
+    g.rect(x + 10, y + height - 3, Math.min(width - 20, width * 0.42), 1)
+      .fill({ color: accent, alpha: 0.36 });
   }
 
   update(state: HUDState, balance: EmotionalBalance) {
@@ -201,8 +213,8 @@ export class HUD {
     this.stabValue.text = `${Math.round(state.stability)}/${state.maxStability}`;
     this.stabValue.style.fill = stabColor;
 
-    this.memoryValue.text = `${Math.round(this.displayedMemory)}`;
-    this.scoreValue.text = `${Math.round(this.displayedScore)}`;
+    this.memoryValue.text = formatCompactNumber(this.displayedMemory);
+    this.scoreValue.text = formatCompactNumber(this.displayedScore);
     this.waveValue.text = state.bossWave ? `!${state.wave}` : `${state.wave}`;
     this.waveValue.style.fill = state.bossWave ? UI_THEME.color.danger : 0x6cf0ff;
 
@@ -231,8 +243,7 @@ export class HUD {
       this.statusText.style.fill = 0xff5577;
     } else if (state.betweenWaves) {
       if (state.countdown >= 0) {
-        const prefix = state.autoStartEnabled ? `${HUD_COPY.nextWave}  ${state.countdown.toFixed(1)}s` : HUD_COPY.autoOff;
-        this.statusText.text = `${prefix} / ${HUD_COPY.spaceToStart}`;
+        this.statusText.text = state.autoStartEnabled ? `${HUD_COPY.nextWave} ${state.countdown.toFixed(1)}s` : HUD_COPY.autoOff;
         this.statusText.style.fill = 0x6cf0ff;
       } else {
         this.statusText.text = '';
@@ -272,14 +283,14 @@ export class HUD {
       this.synergyTooltip.visible = false;
       return;
     }
-    const max = 4;
+    const max = 3;
     let x = 0;
     badges.slice(0, max).forEach((badge) => {
       const chip = new Container();
       const bg = new Graphics();
       const labelText = this.compactSynergyLabel(badge.label);
       const label = makeText(labelText, { fontSize: 8, fontWeight: '800', letterSpacing: 0, fill: UI_THEME.color.text });
-      const w = Math.min(68, Math.max(42, (label.width as number) + 12));
+      const w = Math.min(50, Math.max(36, (label.width as number) + 10));
       bg.roundRect(0, 0, w, 14, 5)
         .fill({ color: UI_THEME.color.panelSoft, alpha: 0.92 })
         .stroke({ color: badge.color, width: 1, alpha: 0.88 });

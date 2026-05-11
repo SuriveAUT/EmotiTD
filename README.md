@@ -6,7 +6,7 @@ Stack: TypeScript, Vite, PixiJS v8.
 
 ## Alpha Status
 
-Version: `0.1.3-alpha`
+Version: `0.1.4-alpha`
 
 This is a playable alpha, not a content-complete game. It includes the full first-run loop, three maps, twelve towers, rotating bosses, a standard Wave 30 victory target, endless continuation after victory and local challenge modes. Balance, audio polish, copy consistency and long-run variety are still alpha work.
 
@@ -25,6 +25,10 @@ Included alpha features:
 - Run Summary after victory and defeat.
 - Boss intro and defeat state.
 - Lore-integrated tower tooltips, fracture codex, wave messages and Core Reports.
+- Cleaner HUD/TowerBar/SidePanel hierarchy with compact numbers, larger touch targets and reduced late-run UI clutter.
+
+Best played in landscape on mobile. Portrait mode is supported with a recommendation overlay, but the tactical UI is designed around landscape space.
+Runs are local unless scoreboard submit is used.
 
 ## Run Modes
 

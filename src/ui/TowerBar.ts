@@ -31,9 +31,9 @@ const TAB_GAP = 6;
 const TAB_BASE_X = 16;
 const TAB_BASE_Y = 4;
 
-const BUTTON_W = 60;
+const BUTTON_W = 86;
 const BUTTON_H = 60;
-const BUTTON_GAP = 6;
+const BUTTON_GAP = 10;
 const BUTTON_BASE_X = 16;
 const BUTTON_BASE_Y = 32;
 
@@ -73,19 +73,19 @@ class TowerButton {
     this.container = new Container();
     this.container.eventMode = 'static';
     this.container.cursor = 'pointer';
-    this.container.hitArea = { contains: (x: number, y: number) => x >= -4 && x <= BUTTON_W + 4 && y >= -4 && y <= BUTTON_H + 4 } as any;
+    this.container.hitArea = { contains: (x: number, y: number) => x >= -8 && x <= BUTTON_W + 8 && y >= -8 && y <= BUTTON_H + 8 } as any;
     this.bg = new Graphics();
     this.icon = new Graphics();
     this.container.addChild(this.bg, this.icon);
 
     const stats = TOWER_STATS[type];
-    const label = makeText(TOWER_BUTTON_LABEL[type], { fontSize: 8, fontWeight: '700', letterSpacing: 0, fill: 0xe8edf2 });
+    const label = makeText(TOWER_BUTTON_LABEL[type], { fontSize: 10, fontWeight: '800', letterSpacing: 1, fill: 0xe8edf2 });
     label.position.set(5, 6);
-    const cost = makeText(`${stats.cost}`, { fontSize: 13, fontWeight: '700', fill: 0xffd166 });
+    const cost = makeText(`${stats.cost}`, { fontSize: 14, fontWeight: '800', fill: 0xffd166 });
     cost.anchor.set(1, 0);
     cost.position.set(BUTTON_W - 5, 20);
-    const sub = makeLabel(TOWER_BAR_COPY.subLabel[type], { fontSize: 7, letterSpacing: 0 });
-    sub.position.set(5, BUTTON_H - 12);
+    const sub = makeLabel(TOWER_BAR_COPY.subLabel[type], { fontSize: 8, letterSpacing: 0, fill: 0x9aa6bd });
+    sub.position.set(5, BUTTON_H - 13);
     this.container.addChild(label, cost, sub);
 
     this.draw();
@@ -130,7 +130,7 @@ class TowerButton {
   private drawIcon() {
     const g = this.icon;
     g.clear();
-    const cx = BUTTON_W - 14, cy = BUTTON_H - 18;
+    const cx = BUTTON_W - 16, cy = BUTTON_H - 18;
     const c = EMOTION_COLOR[this.type];
     g.circle(cx, cy, 10).fill({ color: c, alpha: 0.18 });
     g.circle(cx, cy, 6.5).fill({ color: c, alpha: 0.65 });
@@ -413,6 +413,9 @@ export class TowerBar {
   private restartControl: ControlButton;
   private selectedCategory: TowerCategory = 'damage';
   private tooltip: TowerTooltip;
+  private placementHint: Container;
+  private placementHintBg: Graphics;
+  private placementHintText: Text;
 
   constructor(callbacks: TowerBarCallbacks, options: TowerBarOptions = {}) {
     this.callbacks = callbacks;
@@ -423,6 +426,20 @@ export class TowerBar {
     this.container.hitArea = { contains: (x: number, y: number) => x >= 0 && x <= CANVAS.width && y >= 0 && y <= CANVAS.towerBarHeight } as any;
     this.container.on('pointerdown', (e: FederatedPointerEvent) => e.stopPropagation());
     this.tooltip = new TowerTooltip();
+    this.placementHint = new Container();
+    this.placementHint.visible = false;
+    this.placementHint.eventMode = 'static';
+    this.placementHint.cursor = 'pointer';
+    this.placementHint.hitArea = { contains: (x: number, y: number) => x >= 0 && x <= 344 && y >= 0 && y <= 52 } as any;
+    this.placementHintBg = new Graphics();
+    this.placementHintText = makeText('', { fontSize: 12, fontWeight: '800', letterSpacing: 1, fill: UI_THEME.color.text, lineHeight: 16 });
+    this.placementHintText.position.set(14, 9);
+    this.placementHint.position.set(318, -58);
+    this.placementHint.on('pointerdown', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.callbacks.onSelect(null);
+    });
+    this.placementHint.addChild(this.placementHintBg, this.placementHintText);
 
     const bg = new Graphics();
     bg.rect(0, 0, CANVAS.width, CANVAS.towerBarHeight).fill({ color: COLORS.panel, alpha: 0.95 });
@@ -481,6 +498,7 @@ export class TowerBar {
       this.autoControl.container,
       this.restartControl.container
     );
+    this.container.addChild(this.placementHint);
 
     /* start wave button — pinned to right edge of tower bar */
     this.startBtn = new Container();
@@ -548,6 +566,7 @@ export class TowerBar {
   setSelected(t: EmotionType | null) {
     this.tooltip.hide();
     for (const b of this.buttons) b.setSelected(b.type === t);
+    this.updatePlacementHint(t);
     if (t !== null) {
       if (!this.buttons.some((b) => b.type === t)) return;
       const targetCategory = TOWER_STATS[t].category;
@@ -592,5 +611,20 @@ export class TowerBar {
     const cur = this.buttons.find(b => b.selected);
     const next = cur && cur.type === t ? null : t;
     this.callbacks.onSelect(next);
+  }
+
+  private updatePlacementHint(type: EmotionType | null): void {
+    if (type === null) {
+      this.placementHint.visible = false;
+      return;
+    }
+    const color = EMOTION_COLOR[type];
+    this.placementHintText.text = `PLACING ${EMOTION_LABEL[type]}\nTap map to place - tap this banner to cancel`;
+    this.placementHintBg.clear();
+    this.placementHintBg.roundRect(0, 0, 344, 52, 10)
+      .fill({ color: 0x05070d, alpha: 0.94 })
+      .stroke({ color, width: 1.5, alpha: 0.9 });
+    this.placementHintBg.rect(14, 47, 118, 2).fill({ color, alpha: 0.7 });
+    this.placementHint.visible = true;
   }
 }

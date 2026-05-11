@@ -23,12 +23,13 @@ import type { WaveDef } from '../game/WaveManager';
 import { CHALLENGE_MODE_LABEL, type RunConfig } from '../game/RunConfig';
 import { makeLabel, makeText, makeHeadline } from './text';
 import { balanceLore, categoryLoreLabel, towerLore } from '../content/lore';
+import { formatCompactNumber, formatInteger } from './format';
 
 const PANEL_X = CANVAS.width - CANVAS.rightPanelWidth;
 const PANEL_W = CANVAS.rightPanelWidth;
 const PANEL_Y = CANVAS.hudHeight;
 const PANEL_H = CANVAS.height - CANVAS.hudHeight;
-const UPGRADE_BUTTON_H = 96;
+const UPGRADE_BUTTON_H = 118;
 const SCROLL_PAD_TOP = 8;
 const SCROLL_PAD_BOTTOM = 12;
 const VIEWPORT_H = PANEL_H - SCROLL_PAD_TOP - SCROLL_PAD_BOTTOM;
@@ -359,16 +360,16 @@ export class SidePanel {
 
   private formatRunSummary(summary: RunSummary): string {
     const top = summary.topDamageEmotion
-      ? `${EMOTION_LABEL[summary.topDamageEmotion]} ${Math.round(summary.topDamage)}`
+      ? `${EMOTION_LABEL[summary.topDamageEmotion]} ${formatCompactNumber(summary.topDamage)}`
       : 'NONE';
     return [
-      `Score: ${summary.score}`,
+      `Score: ${formatInteger(summary.score)}`,
       `Core State: ${balanceLore[summary.maxBalanceState].title}`,
       `Dominant Emotion: ${summary.dominantEmotionAtDeath ? EMOTION_LABEL[summary.dominantEmotionAtDeath] : 'Mixed'}`,
       `Dominant Category: ${summary.dominantCategoryAtDeath ? categoryLoreLabel(summary.dominantCategoryAtDeath) : 'Balanced pattern'}`,
-      `Kills: ${summary.killsTotal}  Boss: ${summary.bossKills}`,
+      `Kills: ${formatInteger(summary.killsTotal)}  Boss: ${summary.bossKills}`,
       `Damage: ${top}`,
-      `Memory earned: ${summary.memoryEarned}`,
+      `Memory earned: ${formatInteger(summary.memoryEarned)}`,
       `Towers used: ${summary.towersUsed}  Max upgrade: ${summary.highestUpgradeLevel}`,
       `Upgrades: ${summary.upgradesPurchased}  Sold: ${summary.towersSold}`,
       `Core damage: ${summary.coreDamageTaken}`,
@@ -403,7 +404,7 @@ export class SidePanel {
   private appendStats(x: number, y: number, type: EmotionType, stats: TowerStats = TOWER_STATS[type]): number {
     const rows: [string, string][] = [];
     rows.push([SIDE_PANEL_COPY.statCost, `${TOWER_STATS[type].cost}`]);
-    rows.push([SIDE_PANEL_COPY.statDamage, `${Math.round(stats.damage)}`]);
+    rows.push([SIDE_PANEL_COPY.statDamage, `${formatCompactNumber(stats.damage)}`]);
     rows.push([SIDE_PANEL_COPY.statRange, `${Math.round(stats.range)}`]);
     rows.push([SIDE_PANEL_COPY.statFireRate, `${stats.fireRate.toFixed(2)}s`]);
     if (stats.splashRadius) rows.push(['SPLASH', `${Math.round(stats.splashRadius)}`]);
@@ -487,7 +488,6 @@ export class SidePanel {
     const detail = [
       `Category: ${TOWER_CATEGORY_LABEL[stats.category]}`,
       `Role: ${help.role}`,
-      `Response: ${lore.roleLore}`,
       `Strong: ${lore.strengthLore}`,
       `Weak: ${lore.weaknessLore}`,
       `Imbalance: ${lore.imbalanceWarning}`,
@@ -501,7 +501,7 @@ export class SidePanel {
       wordWrapWidth: PANEL_W - 56,
       lineHeight: 14
     });
-    const boxH = Math.max(86, (detailText.height as number) + 16);
+    const boxH = Math.max(74, (detailText.height as number) + 16);
     box.roundRect(x, y, PANEL_W - 36, boxH, 7)
       .fill({ color: 0x0a0f1a, alpha: 0.82 })
       .stroke({ color: EMOTION_COLOR[type], width: 1, alpha: 0.48 });
@@ -764,13 +764,13 @@ export class SidePanel {
       letterSpacing: 1,
       fill: enabled ? 0xffd166 : maxed ? 0x77ffaa : 0x7d8ba6
     });
-    sub.position.set(10, 56);
+    sub.position.set(10, 60);
     btn.addChild(sub);
 
     const summary = locked || nextCost === null ? '' : def.levels[state.path === path ? state.level : 0]?.summary ?? '';
     if (summary) {
       const s = makeText(summary, { fontSize: 9, fill: 0x9aa6bd, wordWrap: true, wordWrapWidth: w - 20, lineHeight: 12 });
-      s.position.set(10, 72);
+      s.position.set(10, 82);
       btn.addChild(s);
     }
 
