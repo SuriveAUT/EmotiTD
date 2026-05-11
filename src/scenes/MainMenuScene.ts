@@ -137,12 +137,12 @@ export class MainMenuScene implements Scene {
       fill: COLORS.textDim
     });
     mapLabel.anchor.set(0.5);
-    mapLabel.position.set(leftX, 216);
+    mapLabel.position.set(leftX, 188);
 
     const mapSelector = new Container();
-    mapSelector.position.set(leftX, 240);
+    mapSelector.position.set(leftX, 248);
     this.mapButtonDrawers = [];
-    mapSelector.addChild(...MAP_LIST.map((map, index) => this.createMapButton(map, 0, index * 100)));
+    mapSelector.addChild(...MAP_LIST.map((map, index) => this.createMapButton(map, 0, index * 108)));
 
     const modeLabel = makeLabel('SELECT MODE', {
       fontSize: 10,
@@ -159,12 +159,12 @@ export class MainMenuScene implements Scene {
     modeSelector.addChild(...modes.map((mode, index) => this.createModeButton(mode, (index % 2) * 208 - 104, Math.floor(index / 2) * 64)));
 
     this.modeInfoText = makeText('', {
-      fontSize: 11,
+      fontSize: 10,
       fill: COLORS.textDim,
       align: 'center',
       wordWrap: true,
-      wordWrapWidth: 390,
-      lineHeight: 15
+      wordWrapWidth: 410,
+      lineHeight: 13
     });
     this.modeInfoText.anchor.set(0.5, 0);
     this.modeInfoText.position.set(rightX, 430);
@@ -418,13 +418,13 @@ export class MainMenuScene implements Scene {
 
   private createMapButton(map: MapDefinition, x: number, y: number): Container {
     const button = new Container();
-    const width = 330;
-    const height = 86;
+    const width = 360;
+    const height = 96;
     const frame = new Graphics();
     const modifier = MAP_MODIFIER_COPY[map.id];
     const lore = mapLore[map.id];
     const title = makeLabel(map.name.toUpperCase(), {
-      fontSize: 13,
+      fontSize: 12,
       letterSpacing: 2,
       fill: COLORS.text
     });
@@ -437,15 +437,15 @@ export class MainMenuScene implements Scene {
       fontSize: 9,
       fill: COLORS.text,
       wordWrap: true,
-      wordWrapWidth: width - 80,
+      wordWrapWidth: width - 88,
       lineHeight: 12
     });
-    const mods = makeText(lore?.gameplayMeaning ?? (modifier?.modifiers ?? []).join('  /  '), {
+    const mods = makeText(this.compactMapGameplay(map.id, lore?.gameplayMeaning ?? (modifier?.modifiers ?? []).join(' / ')), {
       fontSize: 8,
       fontWeight: '700',
       fill: COLORS.warn,
       wordWrap: true,
-      wordWrapWidth: width - 80,
+      wordWrapWidth: width - 88,
       lineHeight: 11
     });
     const difficultyDots = new Graphics();
@@ -501,13 +501,13 @@ export class MainMenuScene implements Scene {
     };
 
     title.anchor.set(0, 0.5);
-    title.position.set(-width / 2 + 42, -27);
+    title.position.set(-width / 2 + 42, -30);
     theme.anchor.set(0, 0.5);
-    theme.position.set(-width / 2 + 42, -10);
+    theme.position.set(-width / 2 + 42, -13);
     summary.anchor.set(0, 0);
-    summary.position.set(-width / 2 + 42, 4);
+    summary.position.set(-width / 2 + 42, 7);
     mods.anchor.set(0, 0);
-    mods.position.set(-width / 2 + 42, 26);
+    mods.position.set(-width / 2 + 42, 36);
     button.position.set(x, y);
     button.eventMode = 'static';
     button.cursor = 'pointer';
@@ -528,6 +528,17 @@ export class MainMenuScene implements Scene {
 
   private refreshMapButtons(): void {
     for (const redraw of this.mapButtonDrawers) redraw();
+  }
+
+  private compactMapGameplay(mapId: string, fallback: string): string {
+    const copy: Record<string, string> = {
+      'fractured-mind': 'Balanced layout. Learn coverage and upgrades.',
+      'silent-lake': 'Long sight lines. Range and scaling matter.',
+      'panic-circuit': 'Short sight lines. Control and Trust matter.',
+      'memory-palace': 'Elite pressure. Pride and Guilt matter.',
+      'burnout-sector': 'Many chokes. Tight placement matters.'
+    };
+    return copy[mapId] ?? fallback;
   }
 
   private createModeButton(mode: GameMode, x: number, y: number): Container {
@@ -585,8 +596,9 @@ export class MainMenuScene implements Scene {
     if (!this.modeInfoText) return;
     const config = this.createSelectedRunConfig();
     const pool = config.allowedTowers?.map((type) => EMOTION_LABEL[type]).join(', ');
-    const seedLine = this.selectedMode === 'limitedEmotions' ? `Seed ${config.seed}  /  Towers ${pool}` : `Seed ${config.seed}`;
-    this.modeInfoText.text = `${CHALLENGE_MODE_LABEL[this.selectedMode]} - ${CHALLENGE_MODE_DIFFICULTY[this.selectedMode]}\n${CHALLENGE_MODE_DESCRIPTION[this.selectedMode]}\n${config.rules.join(' / ')}  /  ${seedLine}`;
+    const seedLine = this.selectedMode === 'limitedEmotions' ? `Seed ${config.seed} / ${pool}` : `Seed ${config.seed}`;
+    const rules = config.rules.slice(0, 2).join(' / ');
+    this.modeInfoText.text = `${CHALLENGE_MODE_LABEL[this.selectedMode]} - ${CHALLENGE_MODE_DIFFICULTY[this.selectedMode]}\n${rules || CHALLENGE_MODE_DESCRIPTION[this.selectedMode]} / ${seedLine}`;
   }
 
   private showResetConfirm(): void {

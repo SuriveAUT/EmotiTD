@@ -31,7 +31,7 @@ const COL = {
   score: 364,
   wave: 492,
   balance: 614,
-  status: CANVAS.width - CANVAS.rightPanelWidth - 22
+  status: CANVAS.width - 32
 } as const;
 
 export class HUD {
@@ -152,7 +152,7 @@ export class HUD {
     this.statusLabel.position.set(COL.status, 10);
     this.container.addChild(this.statusLabel);
 
-    this.statusText = makeText('', { fontSize: 10, letterSpacing: 0, fill: 0x6cf0ff, fontWeight: '700', align: 'right', wordWrap: true, wordWrapWidth: 86, lineHeight: 12 });
+    this.statusText = makeText('', { fontSize: 11, letterSpacing: 0, fill: 0x6cf0ff, fontWeight: '800', align: 'right', wordWrap: true, wordWrapWidth: 230, lineHeight: 13 });
     this.statusText.position.set(0, 27);
     this.statusText.anchor.set(1, 0);
     this.statusText.x = COL.status;
@@ -174,7 +174,7 @@ export class HUD {
     this.drawHudCard(g, 350, 7, 118, 50, 0x77ffaa);
     this.drawHudCard(g, 478, 7, 106, 50, 0x6cf0ff);
     this.drawHudCard(g, 600, 7, 302, 50, 0xb070ff);
-    this.drawHudCard(g, 914, 7, 70, 50, 0x6cf0ff);
+    this.drawHudCard(g, 914, 7, 350, 50, 0x6cf0ff);
   }
 
   private drawHudCard(g: Graphics, x: number, y: number, width: number, height: number, accent: number): void {
