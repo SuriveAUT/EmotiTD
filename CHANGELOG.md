@@ -10,10 +10,17 @@ All notable changes to EMOTICORE TD are documented here. Format follows Keep a C
 - Added a central layout mode helper for desktop, compact, mobile landscape and mobile portrait decisions.
 - Added compact number formatting for dense HUD and run-summary values.
 - Reworked the top HUD into clearer card regions with compact Score/Memory values, reduced synergy clutter and shorter status text.
+- Added click-to-open Emotional Balance details in the canvas HUD with dominance, active effects and synergy breakdown.
 - Widened TowerBar cards, increased touch hit areas and added a clear placement/cancel chip while building.
 - Increased SidePanel upgrade-card height and reduced inspector text density so upgrade descriptions no longer feel compressed.
 - Added a mobile portrait recommendation overlay with a continue-anyway option.
 - Reduced high-quality render resolution caps to safer values for long runs and mobile GPUs.
+
+### Fixed
+
+- Fixed HUD overlap between Emotional Balance, synergy chips and status notices by keeping the top bar compact.
+- Rounded TowerBar/SidePanel utility stats so tooltips no longer show floating-point noise.
+- Prevented boss waves from completing while a boss spawn/intro is still pending.
 
 ### Notes
 

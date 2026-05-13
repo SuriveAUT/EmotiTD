@@ -262,6 +262,10 @@ export class WaveManager {
     return this.active && this.queue.length === 0;
   }
 
+  hasPendingBossSpawn(): boolean {
+    return this.queue.some((pending) => pending.kind === X || pending.kind === M || pending.kind === R);
+  }
+
   endWave() {
     this.active = false;
   }

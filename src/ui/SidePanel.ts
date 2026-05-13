@@ -23,7 +23,7 @@ import type { WaveDef } from '../game/WaveManager';
 import { CHALLENGE_MODE_LABEL, type RunConfig } from '../game/RunConfig';
 import { makeLabel, makeText, makeHeadline } from './text';
 import { balanceLore, categoryLoreLabel, towerLore } from '../content/lore';
-import { formatCompactNumber, formatInteger } from './format';
+import { formatCompactNumber, formatDecimal, formatInteger, formatMultiplier, formatSeconds } from './format';
 
 const PANEL_X = CANVAS.width - CANVAS.rightPanelWidth;
 const PANEL_W = CANVAS.rightPanelWidth;
@@ -406,22 +406,22 @@ export class SidePanel {
     rows.push([SIDE_PANEL_COPY.statCost, `${TOWER_STATS[type].cost}`]);
     rows.push([SIDE_PANEL_COPY.statDamage, `${formatCompactNumber(stats.damage)}`]);
     rows.push([SIDE_PANEL_COPY.statRange, `${Math.round(stats.range)}`]);
-    rows.push([SIDE_PANEL_COPY.statFireRate, `${stats.fireRate.toFixed(2)}s`]);
+    rows.push([SIDE_PANEL_COPY.statFireRate, formatSeconds(stats.fireRate)]);
     if (stats.splashRadius) rows.push(['SPLASH', `${Math.round(stats.splashRadius)}`]);
     if (stats.chainCount)   rows.push(['CHAIN', `${stats.chainCount}`]);
-    if (stats.slowAmount)   rows.push(['SLOW', `${Math.round((1 - stats.slowAmount) * 100)}% / ${stats.slowDuration}s`]);
-    if (stats.fearChance)   rows.push(['STUN', `${Math.round(stats.fearChance * 100)}% / ${stats.stunDuration}s`]);
+    if (stats.slowAmount)   rows.push(['SLOW', `${Math.round((1 - stats.slowAmount) * 100)}% / ${formatSeconds(stats.slowDuration)}`]);
+    if (stats.fearChance)   rows.push(['STUN', `${Math.round(stats.fearChance * 100)}% / ${formatSeconds(stats.stunDuration)}`]);
     if (stats.buffRadius)   rows.push(['BUFF', `+${Math.round((1 - (stats.buffFireRate ?? 1)) * 100)}% ${SIDE_PANEL_COPY.statTempo}`]);
-    if (stats.numbDamageMul) rows.push(['NUMB', `x${stats.numbDamageMul.toFixed(2)}`]);
-    if (stats.poisonDps) rows.push([SIDE_PANEL_COPY.statPoison, `${stats.poisonDps.toFixed(1)}/s / ${stats.poisonDuration}s`]);
-    if (stats.armorShred) rows.push(['SHRED', `x${stats.armorShred.toFixed(2)} / ${stats.armorShredDuration}s`]);
+    if (stats.numbDamageMul) rows.push(['NUMB', formatMultiplier(stats.numbDamageMul)]);
+    if (stats.poisonDps) rows.push([SIDE_PANEL_COPY.statPoison, `${formatDecimal(stats.poisonDps, 1)}/s / ${formatSeconds(stats.poisonDuration)}`]);
+    if (stats.armorShred) rows.push(['SHRED', `${formatMultiplier(stats.armorShred)} / ${formatSeconds(stats.armorShredDuration)}`]);
     if (stats.guiltMark) rows.push(['MARK', `+${Math.round(stats.guiltMark * 100)}% / hit`]);
     if (stats.guiltExecuteThreshold) rows.push(['EXECUTE', `${Math.round(stats.guiltExecuteThreshold * 100)}% HP`]);
-    if (stats.coreShield) rows.push(['SHIELD', `+${stats.coreShield.toFixed(2)} Core`]);
-    if (stats.trustAnchorDuration) rows.push(['ANCHOR', `${stats.trustAnchorDuration.toFixed(2)}s`]);
-    if (stats.shameGroupDamageMul) rows.push(['GROUP', `x${stats.shameGroupDamageMul.toFixed(2)} / ${stats.shameGroupRadius}`]);
-    if (stats.loveLinkRadius) rows.push(['LINK', `${stats.loveLinkRadius} / x${stats.loveDamageMul?.toFixed(2) ?? '1.00'}`]);
-    if (stats.prideIsolationDamageMul) rows.push(['ISOLATED', `x${stats.prideIsolationDamageMul.toFixed(2)}`]);
+    if (stats.coreShield) rows.push(['SHIELD', `+${formatDecimal(stats.coreShield)} Core`]);
+    if (stats.trustAnchorDuration) rows.push(['ANCHOR', formatSeconds(stats.trustAnchorDuration)]);
+    if (stats.shameGroupDamageMul) rows.push(['GROUP', `${formatMultiplier(stats.shameGroupDamageMul)} / ${Math.round(stats.shameGroupRadius ?? 0)}`]);
+    if (stats.loveLinkRadius) rows.push(['LINK', `${Math.round(stats.loveLinkRadius)} / ${formatMultiplier(stats.loveDamageMul)}`]);
+    if (stats.prideIsolationDamageMul) rows.push(['ISOLATED', formatMultiplier(stats.prideIsolationDamageMul)]);
 
     for (const [k, v] of rows) {
       const kt = makeLabel(k);
@@ -444,7 +444,7 @@ export class SidePanel {
 
     const lines = [
       `Base ${Math.round(breakdown.base)} -> Upgraded ${Math.round(breakdown.upgraded)} (${formatPercent(breakdown.upgradePercent)})`,
-      `Final ${Math.round(breakdown.final)}  /  Active x${breakdown.multiplier.toFixed(2)}`
+      `Final ${Math.round(breakdown.final)}  /  Active ${formatMultiplier(breakdown.multiplier)}`
     ];
     const bonusLines = breakdown.lines.length > 0
       ? breakdown.lines.slice(0, 5)
@@ -595,17 +595,22 @@ export class SidePanel {
     const maxDisplayed = 5;
     for (const synergy of this.activeSynergies.slice(0, maxDisplayed)) {
       const title = makeText(synergy.label, { fontSize: 11, fill: 0x77ffaa, fontWeight: '700', letterSpacing: 1 });
-      title.position.set(x, y);
+      title.position.set(x + 9, y + 7);
       const desc = makeText(`${synergy.bonusLabel ? `${synergy.bonusLabel}: ` : ''}${synergy.description}`, {
         fontSize: 9,
         fill: 0x9aa6bd,
         wordWrap: true,
-        wordWrapWidth: PANEL_W - 36,
-        lineHeight: 12
+        wordWrapWidth: PANEL_W - 58,
+        lineHeight: 13
       });
-      desc.position.set(x, y + 14);
-      this.body.addChild(title, desc);
-      y += Math.max(38, 18 + (desc.height as number));
+      desc.position.set(x + 9, y + 23);
+      const boxH = Math.max(48, 31 + (desc.height as number));
+      const box = new Graphics();
+      box.roundRect(x, y, PANEL_W - 36, boxH, 7)
+        .fill({ color: 0x0a0f1a, alpha: 0.76 })
+        .stroke({ color: 0x77ffaa, width: 1, alpha: 0.24 });
+      this.body.addChild(box, title, desc);
+      y += boxH + 7;
     }
 
     if (this.activeSynergies.length > maxDisplayed) {

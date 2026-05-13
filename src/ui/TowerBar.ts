@@ -5,6 +5,7 @@ import { EMOTION_TYPES, EmotionType, TOWER_CATEGORIES, TOWER_CATEGORY_LABEL, typ
 import { towerLore } from '../content/lore';
 import { makeLabel, makeText } from './text';
 import { UI_THEME } from './theme';
+import { formatDecimal, formatMultiplier, formatSeconds } from './format';
 
 export interface TowerBarCallbacks {
   onSelect(type: EmotionType | null): void;
@@ -254,24 +255,24 @@ class TowerTooltip {
       ['COST', `${stats.cost}`],
       ['DAMAGE', `${Math.round(stats.damage)}`],
       ['RANGE', `${Math.round(stats.range)}`],
-      ['FIRE RATE', `${stats.fireRate.toFixed(2)}s`]
+      ['FIRE RATE', formatSeconds(stats.fireRate)]
     ];
 
     if (stats.splashRadius) rows.push(['SPLASH', `${Math.round(stats.splashRadius)}`]);
-    if (stats.chainCount) rows.push(['CHAIN', `${stats.chainCount} / ${stats.chainRange}`]);
-    if (stats.slowAmount) rows.push(['SLOW', `${Math.round((1 - stats.slowAmount) * 100)}% / ${stats.slowDuration}s`]);
-    if (stats.fearChance) rows.push(['STUN', `${Math.round(stats.fearChance * 100)}% / ${stats.stunDuration}s`]);
-    if (stats.buffRadius) rows.push(['BUFF', `${stats.buffRadius} / +${Math.round((1 - (stats.buffFireRate ?? 1)) * 100)}% tempo`]);
-    if (stats.numbDamageMul) rows.push(['NUMB', `x${stats.numbDamageMul.toFixed(2)}`]);
-    if (stats.poisonDps) rows.push(['POISON', `${stats.poisonDps.toFixed(1)}/s / ${stats.poisonDuration}s`]);
-    if (stats.armorShred) rows.push(['SHRED', `x${stats.armorShred.toFixed(2)} / ${stats.armorShredDuration}s`]);
+    if (stats.chainCount) rows.push(['CHAIN', `${stats.chainCount} / ${Math.round(stats.chainRange ?? 0)}`]);
+    if (stats.slowAmount) rows.push(['SLOW', `${Math.round((1 - stats.slowAmount) * 100)}% / ${formatSeconds(stats.slowDuration)}`]);
+    if (stats.fearChance) rows.push(['STUN', `${Math.round(stats.fearChance * 100)}% / ${formatSeconds(stats.stunDuration)}`]);
+    if (stats.buffRadius) rows.push(['BUFF', `${Math.round(stats.buffRadius)} / +${Math.round((1 - (stats.buffFireRate ?? 1)) * 100)}% tempo`]);
+    if (stats.numbDamageMul) rows.push(['NUMB', formatMultiplier(stats.numbDamageMul)]);
+    if (stats.poisonDps) rows.push(['POISON', `${formatDecimal(stats.poisonDps, 1)}/s / ${formatSeconds(stats.poisonDuration)}`]);
+    if (stats.armorShred) rows.push(['SHRED', `${formatMultiplier(stats.armorShred)} / ${formatSeconds(stats.armorShredDuration)}`]);
     if (stats.guiltMark) rows.push(['MARK', `+${Math.round(stats.guiltMark * 100)}% / hit`]);
     if (stats.guiltExecuteThreshold) rows.push(['EXECUTE', `${Math.round(stats.guiltExecuteThreshold * 100)}% HP`]);
-    if (stats.coreShield) rows.push(['SHIELD', `+${stats.coreShield.toFixed(2)} Core`]);
-    if (stats.trustAnchorDuration) rows.push(['ANCHOR', `${stats.trustAnchorDuration.toFixed(2)}s`]);
-    if (stats.shameGroupDamageMul) rows.push(['GROUP', `x${stats.shameGroupDamageMul.toFixed(2)} / ${stats.shameGroupRadius}`]);
-    if (stats.loveLinkRadius) rows.push(['LINK', `${stats.loveLinkRadius} / x${stats.loveDamageMul?.toFixed(2) ?? '1.00'}`]);
-    if (stats.prideIsolationDamageMul) rows.push(['ISOLATED', `x${stats.prideIsolationDamageMul.toFixed(2)}`]);
+    if (stats.coreShield) rows.push(['SHIELD', `+${formatDecimal(stats.coreShield)} Core`]);
+    if (stats.trustAnchorDuration) rows.push(['ANCHOR', formatSeconds(stats.trustAnchorDuration)]);
+    if (stats.shameGroupDamageMul) rows.push(['GROUP', `${formatMultiplier(stats.shameGroupDamageMul)} / ${Math.round(stats.shameGroupRadius ?? 0)}`]);
+    if (stats.loveLinkRadius) rows.push(['LINK', `${Math.round(stats.loveLinkRadius)} / ${formatMultiplier(stats.loveDamageMul)}`]);
+    if (stats.prideIsolationDamageMul) rows.push(['ISOLATED', formatMultiplier(stats.prideIsolationDamageMul)]);
 
     return rows;
   }

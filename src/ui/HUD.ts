@@ -1,11 +1,11 @@
-import { Container, FederatedPointerEvent, Graphics, Text } from 'pixi.js';
-import { CANVAS, COLORS, ECONOMY, EMOTION_COLOR, HUD_COPY } from '../game/config';
-import { EMOTION_TYPES } from '../game/types';
+import { Container, FederatedPointerEvent, Graphics, Rectangle, Text } from 'pixi.js';
+import { CANVAS, COLORS, ECONOMY, EMOTION_COLOR, EMOTION_LABEL, HUD_COPY } from '../game/config';
+import { EMOTION_TYPES, TOWER_CATEGORIES, TOWER_CATEGORY_LABEL } from '../game/types';
 import type { EmotionalBalance } from '../game/EmotionalBalance';
 import { makeLabel, makeText, makeHeadline } from './text';
 import { UI_THEME, mixToward } from './theme';
 import { balanceLore } from '../content/lore';
-import { formatCompactNumber } from './format';
+import { formatCompactNumber, formatDecimal, formatMultiplier } from './format';
 
 export interface HUDState {
   stability: number;
@@ -55,6 +55,12 @@ export class HUD {
   private synergyTooltip: Container;
   private synergyTooltipBg: Graphics;
   private synergyTooltipText: Text;
+  private balanceHotspot: Container;
+  private balancePopup: Container;
+  private balancePopupBg: Graphics;
+  private balancePopupBody: Container;
+  private lastBalance: EmotionalBalance | null = null;
+  private lastSynergyBadges: Array<{ label: string; detail?: string; color: number }> = [];
   private displayedStability = 0;
   private displayedMemory = 0;
   private displayedScore = 0;
@@ -119,15 +125,24 @@ export class HUD {
     this.balanceValue.position.set(COL.balance, 46);
     this.container.addChild(this.balanceValue);
 
+    this.balanceHotspot = new Container();
+    this.balanceHotspot.position.set(600, 7);
+    this.balanceHotspot.hitArea = new Rectangle(0, 0, 302, 50);
+    this.balanceHotspot.eventMode = 'static';
+    this.balanceHotspot.cursor = 'pointer';
+    this.balanceHotspot.on('pointertap', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.toggleBalancePopup();
+    });
+    this.container.addChild(this.balanceHotspot);
+
     this.synergyChips = new Container();
-    this.synergyChips.position.set(COL.balance + 92, 44);
+    this.synergyChips.position.set(COL.balance + 150, 27);
     this.synergyChips.eventMode = 'static';
-    this.synergyChips.cursor = 'help';
-    this.synergyChips.on('pointerover', () => this.showSynergyTooltip());
-    this.synergyChips.on('pointerout', () => this.hideSynergyTooltip());
+    this.synergyChips.cursor = 'pointer';
     this.synergyChips.on('pointertap', (e: FederatedPointerEvent) => {
       e.stopPropagation();
-      this.synergyTooltip.visible = !this.synergyTooltip.visible;
+      this.toggleBalancePopup();
     });
     this.container.addChild(this.synergyChips);
 
@@ -147,12 +162,21 @@ export class HUD {
     this.synergyTooltip.addChild(this.synergyTooltipBg, this.synergyTooltipText);
     this.container.addChild(this.synergyTooltip);
 
+    this.balancePopup = new Container();
+    this.balancePopup.visible = false;
+    this.balancePopup.eventMode = 'static';
+    this.balancePopupBg = new Graphics();
+    this.balancePopupBody = new Container();
+    this.balancePopup.position.set(592, CANVAS.hudHeight + 8);
+    this.balancePopup.addChild(this.balancePopupBg, this.balancePopupBody);
+    this.container.addChild(this.balancePopup);
+
     this.statusLabel = makeLabel(HUD_COPY.status, { fontSize: 9, letterSpacing: 2 });
     this.statusLabel.anchor.set(1, 0);
     this.statusLabel.position.set(COL.status, 10);
     this.container.addChild(this.statusLabel);
 
-    this.statusText = makeText('', { fontSize: 11, letterSpacing: 0, fill: 0x6cf0ff, fontWeight: '800', align: 'right', wordWrap: true, wordWrapWidth: 230, lineHeight: 13 });
+    this.statusText = makeText('', { fontSize: 10, letterSpacing: 0, fill: 0x6cf0ff, fontWeight: '800', align: 'right', wordWrap: true, wordWrapWidth: 292, lineHeight: 12 });
     this.statusText.position.set(0, 27);
     this.statusText.anchor.set(1, 0);
     this.statusText.x = COL.status;
@@ -186,6 +210,8 @@ export class HUD {
   }
 
   update(state: HUDState, balance: EmotionalBalance) {
+    this.lastBalance = balance;
+    this.lastSynergyBadges = state.synergyBadges ?? [];
     this.pulseTime += 0.05;
     if (this.displayedMemory === 0) this.displayedMemory = state.memory;
     if (this.displayedScore === 0) this.displayedScore = state.score;
@@ -220,23 +246,20 @@ export class HUD {
 
     this.drawBalanceDots(balance);
     const balanceState = balance.analysis().state;
-    const stateLabel = balanceLore[balanceState].title;
-    const mechanical = balance.statusText().replace(/^[A-Z]+:\s?/, '');
-    this.balanceValue.text = mechanical === stateLabel || mechanical === 'NEUTRAL'
-      ? stateLabel
-      : `${stateLabel}: ${mechanical}`;
+    this.balanceValue.text = this.compactBalanceStatus(balance);
     this.balanceValue.style.fill =
       balanceState === 'overloaded' ? 0xff5577 :
       balanceState === 'imbalanced' ? 0xff8a4d :
       balanceState === 'tense' ? 0xffd166 :
       balance.isResonating() ? 0x77ffaa : 0x7d8ba6;
     this.drawSynergyChips(state.synergyBadges ?? []);
+    if (this.balancePopup.visible) this.redrawBalancePopup();
 
     if (state.paused) {
       this.statusText.text = `${HUD_COPY.paused} / ${state.speedMultiplier}X`;
       this.statusText.style.fill = 0xffd166;
     } else if (state.notice) {
-      this.statusText.text = state.notice;
+      this.statusText.text = this.compactStatusNotice(state.notice);
       this.statusText.style.fill = 0xffd166;
     } else if (state.balanceDisruption > 0) {
       this.statusText.text = `${HUD_COPY.spiralDisruption} ${state.balanceDisruption.toFixed(1)}S`;
@@ -252,6 +275,24 @@ export class HUD {
       this.statusText.text = `${HUD_COPY.wave} ${state.wave} / ${state.speedMultiplier}X`;
       this.statusText.style.fill = 0x6cf0ff;
     }
+  }
+
+  private compactBalanceStatus(balance: EmotionalBalance): string {
+    const analysis = balance.analysis();
+    if (analysis.totalInfluence <= 0) return 'NEUTRAL';
+    if (analysis.deepResonanceActive) return 'STABLE / DEEP RESONANCE';
+    if (analysis.resonanceActive) return 'STABLE / RESONANCE';
+    if (analysis.state === 'stable') return 'STABLE';
+    const dominantEmotion = analysis.dominantEmotion ? EMOTION_LABEL[analysis.dominantEmotion] : null;
+    const dominantCategory = analysis.dominantCategory ? TOWER_CATEGORY_LABEL[analysis.dominantCategory] : null;
+    const dominant = analysis.dominantCategoryShare >= analysis.dominantEmotionShare
+      ? dominantCategory
+      : dominantEmotion;
+    return `${balanceLore[analysis.state].title} / ${dominant ?? 'MIXED'}`;
+  }
+
+  private compactStatusNotice(text: string): string {
+    return text.length > 42 ? `${text.slice(0, 39)}...` : text;
   }
 
   private drawBalanceDots(balance: EmotionalBalance) {
@@ -283,7 +324,16 @@ export class HUD {
       this.synergyTooltip.visible = false;
       return;
     }
-    const max = 3;
+    this.synergyTooltip.visible = false;
+    const count = makeText(`${badges.length} SYNERGIES`, {
+      fontSize: 9,
+      fontWeight: '900',
+      letterSpacing: 1,
+      fill: 0x77ffaa
+    });
+    count.position.set(0, -17);
+    this.synergyChips.addChild(count);
+    const max = 2;
     let x = 0;
     badges.slice(0, max).forEach((badge) => {
       const chip = new Container();
@@ -307,7 +357,6 @@ export class HUD {
       more.position.set(x, 3);
       this.synergyChips.addChild(more);
     }
-    this.updateSynergyTooltip(badges);
   }
 
   private compactSynergyLabel(label: string): string {
@@ -321,28 +370,115 @@ export class HUD {
       .slice(0, 10);
   }
 
-  private updateSynergyTooltip(badges: Array<{ label: string; detail?: string; color: number }>): void {
-    const lines = badges.slice(0, 8).map((badge) => {
-      return badge.detail ? `${badge.label}: ${badge.detail}` : badge.label;
-    });
-    if (badges.length > 8) lines.push(`+${badges.length - 8} more active synergies`);
-    this.synergyTooltipText.text = lines.join('\n');
-    const width = CANVAS.rightPanelWidth - 16;
-    const height = Math.max(34, (this.synergyTooltipText.height as number) + 16);
-    this.synergyTooltipBg.clear();
-    this.synergyTooltipBg.roundRect(0, 0, width, height, 8)
-      .fill({ color: 0x05070d, alpha: 0.98 })
-      .stroke({ color: 0x6cf0ff, width: 1.5, alpha: 0.9 });
-    this.synergyTooltipBg.rect(10, 0, width - 20, 2).fill({ color: 0x77ffaa, alpha: 0.65 });
-  }
-
-  private showSynergyTooltip(): void {
-    if (this.synergyChips.children.length === 0) return;
-    this.synergyTooltip.visible = true;
-  }
-
-  private hideSynergyTooltip(): void {
+  private toggleBalancePopup(): void {
     this.synergyTooltip.visible = false;
+    this.balancePopup.visible = !this.balancePopup.visible;
+    if (this.balancePopup.visible) this.redrawBalancePopup();
+  }
+
+  private redrawBalancePopup(): void {
+    const balance = this.lastBalance;
+    if (!balance) return;
+    const analysis = balance.analysis();
+    this.balancePopupBody.removeChildren().forEach((child) => child.destroy({ children: true }));
+
+    const width = 390;
+    let y = 12;
+    const title = makeHeadline('EMOTIONAL BALANCE', { fontSize: 18, fill: this.balanceColor(analysis.state) });
+    title.position.set(14, y);
+    this.balancePopupBody.addChild(title);
+    y += 27;
+
+    const lore = balanceLore[analysis.state];
+    const summary = makeText(`${lore.title}: ${lore.description}`, {
+      fontSize: 11,
+      fill: 0xc0c8d8,
+      wordWrap: true,
+      wordWrapWidth: width - 28,
+      lineHeight: 15
+    });
+    summary.position.set(14, y);
+    this.balancePopupBody.addChild(summary);
+    y += (summary.height as number) + 12;
+
+    const effectLines = this.balanceEffectLines(balance);
+    y = this.addPopupSection('ACTIVE EFFECTS', effectLines, y, width, 0xffd166);
+    y = this.addPopupSection('DOMINANCE', this.balanceShareLines(balance), y, width, 0xb070ff);
+    y = this.addPopupSection('SYNERGIES', this.synergyPopupLines(), y, width, 0x77ffaa);
+
+    const height = y + 12;
+    this.balancePopupBg.clear();
+    this.balancePopupBg.roundRect(0, 0, width, height, 10)
+      .fill({ color: 0x05070d, alpha: 0.98 })
+      .stroke({ color: this.balanceColor(analysis.state), width: 1.5, alpha: 0.92 });
+    this.balancePopupBg.rect(14, 0, width - 28, 2).fill({ color: 0x6cf0ff, alpha: 0.55 });
+  }
+
+  private addPopupSection(label: string, lines: string[], y: number, width: number, accent: number): number {
+    const heading = makeLabel(label, { fontSize: 9, letterSpacing: 2, fill: accent });
+    heading.position.set(14, y);
+    this.balancePopupBody.addChild(heading);
+    y += 15;
+    const text = makeText(lines.length > 0 ? lines.join('\n') : 'None active.', {
+      fontSize: 10,
+      fill: 0xe8edf2,
+      wordWrap: true,
+      wordWrapWidth: width - 30,
+      lineHeight: 14
+    });
+    text.position.set(14, y);
+    this.balancePopupBody.addChild(text);
+    return y + (text.height as number) + 12;
+  }
+
+  private balanceEffectLines(balance: EmotionalBalance): string[] {
+    const analysis = balance.analysis();
+    const lines: string[] = [];
+    if (analysis.deepResonanceActive) lines.push('Deep Resonance: +7% damage, +7% utility, -5% leak damage');
+    else if (analysis.resonanceActive) lines.push('Resonance: +4% damage and utility');
+    if (analysis.balancedFormationActive) lines.push('Balanced Formation: synergy effects +5%, boss damage +4%');
+    if (analysis.dominantEmotion && analysis.state !== 'stable') {
+      const damageMul = balance.damageMulFor(analysis.dominantEmotion);
+      const takenMul = balance.damageTakenMulForSource(analysis.dominantEmotion);
+      lines.push(`${EMOTION_LABEL[analysis.dominantEmotion]} dominance: damage ${formatMultiplier(damageMul)}, enemy adaptation ${formatMultiplier(takenMul)}`);
+    }
+    if (analysis.dominantCategory && analysis.state !== 'stable') {
+      if (analysis.dominantCategory === 'control') lines.push(`Control overload: CC effects ${formatMultiplier(balance.controlEffectMul())}`);
+      if (analysis.dominantCategory === 'support') lines.push(`Support overload: buffs ${formatMultiplier(balance.supportEffectMul())}`);
+      if (analysis.dominantCategory === 'damage') lines.push(`Damage overload: core leak damage ${formatMultiplier(balance.coreDamageMul())}`);
+      if (analysis.dominantCategory === 'defense') lines.push(`Defense overload: new enemy HP ${formatMultiplier(balance.enemyHpMul())}`);
+    }
+    if (lines.length === 0) lines.push('No penalty. Keep mixing emotions to maintain resonance.');
+    return lines;
+  }
+
+  private balanceShareLines(balance: EmotionalBalance): string[] {
+    const analysis = balance.analysis();
+    const emotions = EMOTION_TYPES
+      .map((type) => ({ label: EMOTION_LABEL[type], share: analysis.shareByEmotion[type] }))
+      .filter((entry) => entry.share > 0)
+      .sort((a, b) => b.share - a.share)
+      .slice(0, 5)
+      .map((entry) => `${entry.label}: ${formatDecimal(entry.share * 100, 1)}%`);
+    const categories = TOWER_CATEGORIES
+      .map((category) => `${TOWER_CATEGORY_LABEL[category]}: ${formatDecimal(analysis.shareByCategory[category] * 100, 1)}%`);
+    return [...emotions, ...categories];
+  }
+
+  private synergyPopupLines(): string[] {
+    if (this.lastSynergyBadges.length === 0) return ['No local synergies active. Place matching emotions nearby.'];
+    const lines = this.lastSynergyBadges.slice(0, 8).map((badge) => (
+      badge.detail ? `${badge.label}: ${badge.detail}` : badge.label
+    ));
+    if (this.lastSynergyBadges.length > 8) lines.push(`+${this.lastSynergyBadges.length - 8} more active synergies`);
+    return lines;
+  }
+
+  private balanceColor(state: string): number {
+    if (state === 'overloaded') return 0xff5577;
+    if (state === 'imbalanced') return 0xff8a4d;
+    if (state === 'tense') return 0xffd166;
+    return 0x77ffaa;
   }
 
   forceRebuild(): void {
@@ -350,5 +486,6 @@ export class HUD {
     this.drawBg();
     this.synergyChips.removeChildren().forEach((child) => child.destroy({ children: true }));
     this.synergyTooltip.visible = false;
+    this.balancePopup.visible = false;
   }
 }

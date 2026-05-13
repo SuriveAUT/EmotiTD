@@ -10,6 +10,18 @@ export function formatCompactNumber(value: number): string {
   return rounded.toLocaleString('en-US');
 }
 
+export function formatDecimal(value: number, digits = 2): string {
+  return value.toFixed(digits).replace(/\.?0+$/, '');
+}
+
+export function formatSeconds(value: number | undefined, digits = 2): string {
+  return `${formatDecimal(value ?? 0, digits)}s`;
+}
+
+export function formatMultiplier(value: number | undefined, digits = 2): string {
+  return `x${formatDecimal(value ?? 1, digits)}`;
+}
+
 function trimFixed(value: number, digits: number): string {
   return value.toFixed(digits).replace(/\.0$/, '');
 }

@@ -819,7 +819,7 @@ export class Game {
     this.updateCombatNotices(dt);
 
     /* wave-end check */
-    if (this.waves.active && this.waves.isSpawningDone() && this.enemies.length === 0) {
+    if (this.canCompleteCurrentWave()) {
       this.completeWave();
     }
 
@@ -835,6 +835,17 @@ export class Game {
 
     this.drawSynergyLines();
     this.refreshUi();
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  private canCompleteCurrentWave(): boolean {
+    if (!this.waves.active || !this.waves.isSpawningDone() || this.enemies.length > 0) return false;
+    const currentDef = this.waves.currentDef();
+    if (currentDef?.isBoss && (this.waves.hasPendingBossSpawn() || this.bossIntroOverlay || this.bossIntroWave !== null)) {
+      return false;
+    }
+    return !this.enemies.some((enemy) => enemy.alive && isBossKind(enemy.kind));
   }
 
   /* ------------------------------------------------------------------ */
