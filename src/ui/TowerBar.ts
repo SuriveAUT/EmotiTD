@@ -6,6 +6,7 @@ import { towerLore } from '../content/lore';
 import { makeLabel, makeText } from './text';
 import { UI_THEME } from './theme';
 import { formatDecimal, formatMultiplier, formatSeconds } from './format';
+import { placementHintCopy } from './textPolicy';
 
 export interface TowerBarCallbacks {
   onSelect(type: EmotionType | null): void;
@@ -433,7 +434,15 @@ export class TowerBar {
     this.placementHint.cursor = 'pointer';
     this.placementHint.hitArea = { contains: (x: number, y: number) => x >= 0 && x <= 344 && y >= 0 && y <= 52 } as any;
     this.placementHintBg = new Graphics();
-    this.placementHintText = makeText('', { fontSize: 12, fontWeight: '800', letterSpacing: 1, fill: UI_THEME.color.text, lineHeight: 16 });
+    this.placementHintText = makeText('', {
+      fontSize: 12,
+      fontWeight: '800',
+      letterSpacing: 1,
+      fill: UI_THEME.color.text,
+      lineHeight: 16,
+      wordWrap: true,
+      wordWrapWidth: 316
+    });
     this.placementHintText.position.set(14, 9);
     this.placementHint.position.set(318, -58);
     this.placementHint.on('pointerdown', (e: FederatedPointerEvent) => {
@@ -620,7 +629,7 @@ export class TowerBar {
       return;
     }
     const color = EMOTION_COLOR[type];
-    this.placementHintText.text = `PLACING ${EMOTION_LABEL[type]}\nTap map to place - tap this banner to cancel`;
+    this.placementHintText.text = placementHintCopy(EMOTION_LABEL[type]);
     this.placementHintBg.clear();
     this.placementHintBg.roundRect(0, 0, 344, 52, 10)
       .fill({ color: 0x05070d, alpha: 0.94 })

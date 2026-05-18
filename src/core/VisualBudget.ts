@@ -1,4 +1,4 @@
-import type { QualitySetting } from './SaveManager';
+import { classifyVisualLoad, type VisualBudgetInput, type VisualLoadLevel } from './performancePolicy';
 
 export type VisualEffectKind =
   | 'hit'
@@ -9,16 +9,7 @@ export type VisualEffectKind =
   | 'ground'
   | 'floatingText';
 
-export type VisualLoadLevel = 'normal' | 'medium' | 'high' | 'extreme';
-
-export interface VisualBudgetInput {
-  wave: number;
-  fps: number;
-  enemyCount: number;
-  projectileCount: number;
-  particleCount: number;
-  quality: QualitySetting;
-}
+export type { VisualBudgetInput, VisualLoadLevel } from './performancePolicy';
 
 export class VisualBudget {
   private skipRate = 1;
@@ -27,27 +18,9 @@ export class VisualBudget {
 
   update(input: VisualBudgetInput): void {
     this.frame++;
-    let nextLevel: VisualLoadLevel = 'normal';
-    let nextSkipRate = 1;
-
-    if (input.enemyCount > 85 || input.fps < 28 || input.particleCount > 320 || input.projectileCount > 180) {
-      nextLevel = 'extreme';
-      nextSkipRate = 8;
-    } else if (input.enemyCount > 60 || input.fps < 38 || input.wave > 45 || input.particleCount > 220) {
-      nextLevel = 'high';
-      nextSkipRate = 4;
-    } else if (input.enemyCount > 30 || input.fps < 50 || input.wave > 30) {
-      nextLevel = 'medium';
-      nextSkipRate = 2;
-    }
-
-    if (input.quality === 'low') {
-      nextSkipRate = Math.max(nextSkipRate, 4);
-      if (nextLevel === 'normal' || nextLevel === 'medium') nextLevel = 'high';
-    }
-
-    this.skipRate = nextSkipRate;
-    this.loadLevel = nextLevel;
+    const next = classifyVisualLoad(input);
+    this.skipRate = next.skipRate;
+    this.loadLevel = next.level;
   }
 
   shouldRender(kind: VisualEffectKind, important = false): boolean {

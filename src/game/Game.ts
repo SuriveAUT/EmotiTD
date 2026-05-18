@@ -2,6 +2,7 @@ import { Application, Container, FederatedPointerEvent, Graphics, Text, Ticker }
 import { GlowFilter } from 'pixi-filters';
 import { audioManager } from '../core/AudioManager';
 import type { QualitySetting } from '../core/SaveManager';
+import { assessPerformancePressure } from '../core/performancePolicy';
 import { getRenderCaps, type RenderCaps } from '../core/renderQuality';
 import { VisualBudget } from '../core/VisualBudget';
 import { BOSS_WARNING_COPY, CANVAS, COLORS, DEFAULT_MAP, ECONOMY, EMOTION_COLOR, FIELD, TOWER_STATS, type BurnGroundSpec, type MapDefinition } from './config';
@@ -28,6 +29,7 @@ import { EconomyLog } from './EconomyLog';
 import { DevToolsOverlay, type DevToolsSnapshot } from '../debug/DevToolsOverlay';
 import { bossLore, waveLoreMessages } from '../content/lore';
 import { ScoreSubmitOverlay } from '../ui/ScoreSubmitOverlay';
+import { overlayButtonWidth } from '../ui/textPolicy';
 
 interface GameState {
   stability: number;
@@ -2053,7 +2055,7 @@ export class Game {
 
   private createOverlayButton(label: string, x: number, y: number, color: number, onClick: () => void): Container {
     const button = new Container();
-    const width = label.length > 9 ? 230 : 170;
+    const width = overlayButtonWidth(label);
     const frame = new Graphics();
     const text = makeLabel(label, { fontSize: 11, letterSpacing: 2, fill: COLORS.text });
     const draw = (hovered: boolean): void => {
@@ -2145,16 +2147,21 @@ export class Game {
     this.panicRecoveryCooldown = Math.max(0, this.panicRecoveryCooldown - dt);
     const fps = this.app.ticker.FPS || 60;
     const particleCounts = this.particles.counts();
-    const highLoad =
-      (this.waves.current >= 35 && fps < 35) ||
-      particleCounts.particles >= this.renderCaps.maxParticles ||
-      this.projectiles.length >= this.renderCaps.maxProjectiles ||
-      (this.renderCaps.maxFloatingTexts > 0 && this.combatNotices.length >= this.renderCaps.maxFloatingTexts) ||
-      this.groundEffects.length >= this.renderCaps.maxGroundEffects;
+    const pressure = assessPerformancePressure({
+      wave: this.waves.current,
+      fps,
+      enemyCount: this.enemies.length,
+      projectileCount: this.projectiles.length,
+      particleCount: particleCounts.particles,
+      floatingTextCount: this.combatNotices.length,
+      groundEffectCount: this.groundEffects.length,
+      overheatZoneCount: this.overheatZones.length,
+      quality: this.currentQuality
+    }, this.renderCaps);
 
-    this.highLoadTimer = highLoad ? this.highLoadTimer + dt : Math.max(0, this.highLoadTimer - dt * 2);
+    this.highLoadTimer = pressure.recoveryRecommended ? this.highLoadTimer + dt : Math.max(0, this.highLoadTimer - dt * 2);
     if (this.highLoadTimer > 3) {
-      this.panicRecovery(`high load fps=${fps.toFixed(0)}`);
+      this.panicRecovery(`${pressure.reason} fps=${fps.toFixed(0)}`);
       this.highLoadTimer = 0;
     }
   }

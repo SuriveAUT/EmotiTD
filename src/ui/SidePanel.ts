@@ -24,6 +24,7 @@ import { CHALLENGE_MODE_LABEL, type RunConfig } from '../game/RunConfig';
 import { makeLabel, makeText, makeHeadline } from './text';
 import { balanceLore, categoryLoreLabel, towerLore } from '../content/lore';
 import { formatCompactNumber, formatDecimal, formatInteger, formatMultiplier, formatSeconds } from './format';
+import { sidePanelBodyTextWidth } from './textPolicy';
 
 const PANEL_X = CANVAS.width - CANVAS.rightPanelWidth;
 const PANEL_W = CANVAS.rightPanelWidth;
@@ -586,10 +587,16 @@ export class SidePanel {
     y += 18;
 
     if (this.activeSynergies.length === 0) {
-      const empty = makeText(SIDE_PANEL_COPY.noActivePairs, { fontSize: 11, fill: 0x7d8ba6 });
+      const empty = makeText(SIDE_PANEL_COPY.noActivePairs, {
+        fontSize: 11,
+        fill: 0x7d8ba6,
+        wordWrap: true,
+        wordWrapWidth: sidePanelBodyTextWidth(PANEL_W),
+        lineHeight: 15
+      });
       empty.position.set(x, y);
       this.body.addChild(empty);
-      return y + 22;
+      return y + Math.max(22, empty.height as number) + 4;
     }
 
     const maxDisplayed = 5;

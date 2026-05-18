@@ -6,6 +6,7 @@ import { makeLabel, makeText, makeHeadline } from './text';
 import { UI_THEME, mixToward } from './theme';
 import { balanceLore } from '../content/lore';
 import { formatCompactNumber, formatDecimal, formatMultiplier } from './format';
+import { compactStatusNotice } from './textPolicy';
 
 export interface HUDState {
   stability: number;
@@ -259,7 +260,7 @@ export class HUD {
       this.statusText.text = `${HUD_COPY.paused} / ${state.speedMultiplier}X`;
       this.statusText.style.fill = 0xffd166;
     } else if (state.notice) {
-      this.statusText.text = this.compactStatusNotice(state.notice);
+      this.statusText.text = compactStatusNotice(state.notice);
       this.statusText.style.fill = 0xffd166;
     } else if (state.balanceDisruption > 0) {
       this.statusText.text = `${HUD_COPY.spiralDisruption} ${state.balanceDisruption.toFixed(1)}S`;
@@ -289,10 +290,6 @@ export class HUD {
       ? dominantCategory
       : dominantEmotion;
     return `${balanceLore[analysis.state].title} / ${dominant ?? 'MIXED'}`;
-  }
-
-  private compactStatusNotice(text: string): string {
-    return text.length > 42 ? `${text.slice(0, 39)}...` : text;
   }
 
   private drawBalanceDots(balance: EmotionalBalance) {

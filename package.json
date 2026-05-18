@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build",
     "deploy:server": "powershell -ExecutionPolicy Bypass -File tools/deploy-server.ps1",
     "preview": "vite preview",
+    "test:logic": "node tools/run-typescript-tests.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
