@@ -11,8 +11,6 @@ export class AudioManager {
   private currentMusicGain = 1;
   private audioUnlocked = false;
   private unlockListenersAttached = false;
-  private unavailable = new Set<string>();
-  private availability = new Map<string, boolean>();
 
   constructor() {
     this.attachUnlockListeners();
@@ -75,7 +73,7 @@ export class AudioManager {
 
   private async playSfxAsync(name: string): Promise<void> {
     const asset = getAudioAsset('sfx', name);
-    if (!asset || !await this.hasAsset(asset.src)) return;
+    if (!asset) return;
 
     const audio = new Audio(asset.src);
     audio.preload = asset.preload;
@@ -103,11 +101,6 @@ export class AudioManager {
     }
 
     this.stopActiveMusic();
-    if (!await this.hasAsset(asset.src)) {
-      if (this.desiredMusicName === name) this.desiredMusicName = null;
-      return;
-    }
-
     const audio = new Audio(asset.src);
     audio.loop = asset.loop;
     audio.preload = asset.preload;
@@ -125,24 +118,6 @@ export class AudioManager {
     this.currentMusicName = null;
     this.desiredMusicName = null;
     this.currentMusicGain = 1;
-  }
-
-  private async hasAsset(src: string): Promise<boolean> {
-    const known = this.availability.get(src);
-    if (known !== undefined) return known;
-    if (this.unavailable.has(src)) return false;
-
-    try {
-      const response = await fetch(src, { method: 'HEAD' });
-      const available = response.ok;
-      this.availability.set(src, available);
-      if (!available) this.unavailable.add(src);
-      return available;
-    } catch {
-      this.availability.set(src, false);
-      this.unavailable.add(src);
-      return false;
-    }
   }
 
   private clamp01(value: number): number {

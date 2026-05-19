@@ -1869,6 +1869,7 @@ export class Game {
     this.worldRoot.position.set(0, 0);
     this.map.redrawCore(1);
     this.towerBar.setSelected(null);
+    audioManager.playMusic('run-ambient');
     this.refreshSidePanel();
     this.refreshUi();
   }
