@@ -23,6 +23,7 @@ interface AudioAssetConfig {
 }
 
 const KENNEY = 'Kenney CC0';
+const OPENGAMEART = 'OpenGameArt CC0';
 
 const audioLibrary: Record<AudioKind, Record<string, AudioAssetConfig>> = {
   sfx: {
@@ -93,21 +94,21 @@ const audioLibrary: Record<AudioKind, Record<string, AudioAssetConfig>> = {
   music: {
     'menu-theme': {
       file: 'menu-theme.ogg',
-      gain: 0.28,
+      gain: 0.48,
       loop: true,
       preload: 'auto',
-      credit: KENNEY,
-      source: 'Sci-fi Sounds',
-      sourceFile: 'computerNoise_003.ogg'
+      credit: OPENGAMEART,
+      source: 'Heavenly Loop by isaiah658',
+      sourceFile: 'Heavenly Loop.ogg'
     },
     'run-ambient': {
       file: 'run-ambient.ogg',
-      gain: 0.2,
+      gain: 0.18,
       loop: true,
       preload: 'auto',
-      credit: KENNEY,
-      source: 'Sci-fi Sounds',
-      sourceFile: 'spaceEngineLow_002.ogg'
+      credit: OPENGAMEART,
+      source: 'Calm Track by pmiller',
+      sourceFile: 'calm_track-loop.ogg'
     },
     victory: {
       file: 'victory.ogg',

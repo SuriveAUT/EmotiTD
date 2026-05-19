@@ -1,6 +1,6 @@
 # Third-party audio
 
-All shipped audio clips are OGG conversions from Kenney source packs and are used under Creative Commons Zero (CC0).
+All shipped audio clips are used under Creative Commons Zero (CC0).
 
 Source pages:
 
@@ -8,6 +8,8 @@ Source pages:
 - Kenney Digital Audio: https://kenney.nl/assets/digital-audio
 - Kenney Sci-fi Sounds: https://kenney.nl/assets/sci-fi-sounds
 - Kenney Music Jingles: https://kenney.nl/assets/music-jingles
+- OpenGameArt Heavenly Loop by isaiah658: https://opengameart.org/content/heavenly-loop
+- OpenGameArt Calm Track by pmiller: https://opengameart.org/content/calm-track
 
 Runtime mapping:
 
@@ -20,7 +22,7 @@ Runtime mapping:
 - `sfx/wave-complete.ogg`: Interface Sounds, `confirmation_001.ogg`
 - `sfx/victory.ogg`: Music Jingles, `jingles_STEEL07.ogg`
 - `sfx/game-over.ogg`: Music Jingles, `jingles_HIT16.ogg`
-- `music/menu-theme.ogg`: Sci-fi Sounds, `computerNoise_003.ogg`
-- `music/run-ambient.ogg`: Sci-fi Sounds, `spaceEngineLow_002.ogg`
+- `music/menu-theme.ogg`: Heavenly Loop, `Heavenly Loop.ogg`
+- `music/run-ambient.ogg`: Calm Track, `calm_track-loop.ogg`
 - `music/victory.ogg`: Music Jingles, `jingles_STEEL14.ogg`
 - `music/game-over.ogg`: Music Jingles, `jingles_HIT05.ogg`
