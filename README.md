@@ -6,7 +6,7 @@ Stack: TypeScript, Vite, PixiJS v8.
 
 ## Alpha Status
 
-Version: `0.1.4-alpha`
+Version: `1.5.0-alpha`
 
 This is a playable alpha, not a content-complete game. It includes the full first-run loop, three maps, twelve towers, rotating bosses, a standard Wave 30 victory target, endless continuation after victory and local challenge modes. Balance, audio polish, copy consistency and long-run variety are still alpha work.
 
