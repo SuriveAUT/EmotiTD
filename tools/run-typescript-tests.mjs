@@ -25,6 +25,8 @@ writeFileSync(tsconfigPath, JSON.stringify({
     outDir
   },
   files: [
+    path.join(root, 'src', 'vite-env.d.ts'),
+    path.join(root, 'src', 'core', 'audioManifest.ts'),
     path.join(root, 'src', 'core', 'performancePolicy.ts'),
     path.join(root, 'src', 'ui', 'textPolicy.ts')
   ]
@@ -33,6 +35,7 @@ writeFileSync(tsconfigPath, JSON.stringify({
 execFileSync(process.execPath, [tscBin, '--project', tsconfigPath], { cwd: root, stdio: 'inherit' });
 
 for (const testFile of [
+  path.join(root, 'tools', 'audioManifest.test.mjs'),
   path.join(root, 'tools', 'performancePolicy.test.mjs'),
   path.join(root, 'tools', 'textPolicy.test.mjs')
 ]) {
