@@ -1,6 +1,6 @@
 import { Container, Graphics, Text } from 'pixi.js';
 import type { SaveManager } from '../core/SaveManager';
-import { COLORS, EMOTION_COLOR } from './config';
+import { COLORS, EMOTION_COLOR, TUTORIAL_STEPS } from './config';
 import { EmotionType, type UpgradePath } from './types';
 import { makeHeadline, makeLabel, makeText } from '../ui/text';
 
@@ -24,74 +24,7 @@ interface TutorialStep {
   advanceMode: 'button' | 'event';
 }
 
-const STEPS: TutorialStep[] = [
-  {
-    id: 'welcome',
-    title: 'Welcome to EMOTICORE TD',
-    body: 'Your Core is breaking. Build emotion towers, hold the path, and keep Stability above zero.',
-    hint: 'This short tutorial follows your first run.',
-    nextLabel: 'BEGIN',
-    advanceMode: 'button'
-  },
-  {
-    id: 'select-anger',
-    title: 'Select Anger',
-    body: 'Anger is a cheap splash tower and the fastest way to establish first defense.',
-    hint: 'Click the WUT tower card in the bottom bar.',
-    advanceMode: 'event'
-  },
-  {
-    id: 'place-anger-tower',
-    title: 'Place the Tower',
-    body: 'Build towers on open grid cells near the enemy path. Range and placement matter more than raw damage.',
-    hint: 'Click a free build tile to place Anger.',
-    advanceMode: 'event'
-  },
-  {
-    id: 'start-wave',
-    title: 'Start the Wave',
-    body: 'Waves send thoughts toward the Core. You can start manually with the button or Space.',
-    hint: 'Click START WAVE or press Space.',
-    advanceMode: 'event'
-  },
-  {
-    id: 'place-second-emotion',
-    title: 'Add Another Emotion',
-    body: 'Different emotions cover different weaknesses. Sadness slows, Joy chains, Fear stuns, Calm supports, Hope cracks numb enemies.',
-    hint: 'Place any second emotion tower when you have enough Memory.',
-    advanceMode: 'event'
-  },
-  {
-    id: 'explain-resonance',
-    title: 'Resonance',
-    body: 'Mixing three unique emotions creates Resonance for stronger tempo. Too many of one emotion can create Imbalance.',
-    hint: 'Watch the Emotional Balance dots in the top HUD.',
-    nextLabel: 'GOT IT',
-    advanceMode: 'button'
-  },
-  {
-    id: 'select-tower',
-    title: 'Select a Tower',
-    body: 'Selecting a built tower opens its detail panel and upgrade paths.',
-    hint: 'Click any tower on the field.',
-    advanceMode: 'event'
-  },
-  {
-    id: 'upgrade-tower',
-    title: 'Upgrade',
-    body: 'Upgrades specialize a tower into one path. Pick the path that fits the current wave pressure.',
-    hint: 'Buy any available upgrade in the right panel.',
-    advanceMode: 'event'
-  },
-  {
-    id: 'finish',
-    title: 'Tutorial Complete',
-    body: 'You know the loop: build, start waves, balance emotions, upgrade, and protect the Core.',
-    hint: 'Good luck.',
-    nextLabel: 'FINISH',
-    advanceMode: 'button'
-  }
-];
+const STEPS: readonly TutorialStep[] = TUTORIAL_STEPS;
 
 export class TutorialManager {
   readonly container = new Container();

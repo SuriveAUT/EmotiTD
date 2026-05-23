@@ -2,30 +2,38 @@ import { Application, Container, FederatedPointerEvent, Graphics, Text, Ticker }
 import { GlowFilter } from 'pixi-filters';
 import { audioManager } from '../core/AudioManager';
 import type { QualitySetting } from '../core/SaveManager';
-import { CANVAS, COLORS, DEFAULT_MAP, ECONOMY, EMOTION_COLOR, FIELD, TOWER_STATS, type BurnGroundSpec, type MapDefinition } from './config';
-import { EMOTION_TYPES, EmotionType, EnemyKind, type DamagePacket, type TargetingMode, type UpgradePath } from './types';
+import { getRenderCaps, type RenderCaps } from '../core/renderQuality';
+import { VisualBudget } from '../core/VisualBudget';
+import { BOSS_WARNING_COPY, CANVAS, COLORS, DEFAULT_MAP, ECONOMY, EMOTION_COLOR, FIELD, TOWER_STATS, type BurnGroundSpec, type MapDefinition } from './config';
+import { EmotionType, EnemyKind, isBossKind, type DamagePacket, type TargetingMode, type UpgradePath } from './types';
 import { GameMap } from './GameMap';
 import { ParticleSystem } from './Particles';
 import { Tower } from './Tower';
 import { Enemy } from './Enemy';
 import { Projectile } from './Projectile';
-import { WaveManager } from './WaveManager';
+import { bossKindForWave, WaveManager } from './WaveManager';
 import { EmotionalBalance } from './EmotionalBalance';
 import { HUD } from '../ui/HUD';
 import { TowerBar } from '../ui/TowerBar';
 import { SidePanel } from '../ui/SidePanel';
 import { makeHeadline, makeLabel, makeText } from '../ui/text';
-import { saveManager, type SaveManager } from '../core/SaveManager';
+import { saveManager, type CurrentRunSave, type SaveManager } from '../core/SaveManager';
+import { APP_VERSION } from '../core/version';
 import { TutorialManager } from './TutorialManager';
-import { STANDARD_MAX_WAVE, type GameMode } from './GameMode';
+import type { GameMode } from './GameMode';
+import { createDefaultRunConfig, type RunConfig } from './RunConfig';
 import { SynergySystem } from './SynergySystem';
 import { RunStats } from './RunStats';
+import { EconomyLog } from './EconomyLog';
+import { DevToolsOverlay, type DevToolsSnapshot } from '../debug/DevToolsOverlay';
+import { bossLore, waveLoreMessages } from '../content/lore';
+import { ScoreSubmitOverlay } from '../ui/ScoreSubmitOverlay';
 
 interface GameState {
   stability: number;
   memory: number;
   paused: boolean;
-  speedMultiplier: 1 | 2;
+  speedMultiplier: 1 | 2 | 3;
   autoStartEnabled: boolean;
   defeat: boolean;
   victory: boolean;
@@ -41,6 +49,8 @@ interface GameState {
 interface GameOptions {
   mode?: GameMode;
   map?: MapDefinition;
+  runConfig?: RunConfig;
+  resumeSave?: CurrentRunSave;
   onMainMenu?: () => void;
 }
 
@@ -56,6 +66,15 @@ interface GroundEffect {
   duration: number;
   remaining: number;
   tick: number;
+  gfx: Graphics;
+}
+
+interface OverheatZone {
+  x: number;
+  y: number;
+  radius: number;
+  duration: number;
+  remaining: number;
   gfx: Graphics;
 }
 
@@ -86,7 +105,9 @@ export class Game {
   private waves = new WaveManager();
   private balance = new EmotionalBalance();
   private synergies = new SynergySystem();
+  private visualBudget = new VisualBudget();
   private runStats = new RunStats();
+  private economyLog = new EconomyLog();
 
   private hud: HUD;
   private towerBar: TowerBar;
@@ -113,6 +134,7 @@ export class Game {
   private towers: Tower[] = [];
   private projectiles: Projectile[] = [];
   private groundEffects: GroundEffect[] = [];
+  private overheatZones: OverheatZone[] = [];
   private combatNotices: CombatNotice[] = [];
   private spiralPulseTimer = 5;
   private balanceDisruption = 0;
@@ -120,6 +142,9 @@ export class Game {
   private bossIntroOverlay: Container | null = null;
   private bossIntroWave: number | null = null;
   private lowStabilityPulseTimer = 0;
+  private maskResistTimer = 0;
+  private maskResistEmotion: EmotionType | null = null;
+  private burnoutZoneTimer = 4.5;
 
   private selectedTowerType: EmotionType | null = null;
   private selectedTower: Tower | null = null;
@@ -133,30 +158,60 @@ export class Game {
   };
   private readonly handleKeyDown = (e: KeyboardEvent) => this.onKeyDown(e);
   private readonly handleContextMenu = (e: MouseEvent) => e.preventDefault();
+  private readonly handleVisibilityChange = () => {
+    if (document.hidden) this.saveCurrentRun();
+  };
+  private readonly handlePageHide = () => this.saveCurrentRun();
+  private readonly handleBeforeUnload = () => this.saveCurrentRun();
+  private readonly handleRendererContextLost = () => this.onRendererContextLost();
+  private readonly handleRendererContextRestored = () => this.onRendererContextRestored();
 
   private ghost = new Container();
   private ghostBody = new Graphics();
   private ghostRange = new Graphics();
   private rangePreview = new Graphics();
+  private synergyLines = new Graphics();
   private readonly saves: SaveManager;
   private mode: GameMode;
   private readonly onMainMenu?: () => void;
   private readonly mapDefinition: MapDefinition;
+  private readonly runConfig: RunConfig;
   private tutorial: TutorialManager | null = null;
   private victoryOverlay: Container | null = null;
   private pauseOverlay: Container | null = null;
+  private abandonConfirmOverlay: Container | null = null;
+  private devTools: DevToolsOverlay | null = null;
+  private scoreSubmit: ScoreSubmitOverlay | null = null;
+  private scoreSubmittedForRun = false;
+  private autoSaveTimer = 0;
+  private devStabilityLogTimer = 0;
+  private highLoadTimer = 0;
+  private panicRecoveryCooldown = 0;
+  private rendererContextLost = false;
+  private contextLostCount = 0;
+  private currentQuality: QualitySetting = 'medium';
+  private renderCaps: RenderCaps = getRenderCaps('medium');
+  private restoredFromWaveStart = false;
+  private readonly resumeSave?: CurrentRunSave;
 
   constructor(app: Application, saves: SaveManager = saveManager, options: GameOptions = {}) {
     this.app = app;
     this.saves = saves;
     this.mode = options.mode ?? 'standard';
     this.mapDefinition = options.map ?? DEFAULT_MAP;
+    this.resumeSave = options.resumeSave;
+    this.runConfig = this.normalizedRunConfigForResume(options.runConfig ?? createDefaultRunConfig(this.mapDefinition.id), this.resumeSave);
     this.onMainMenu = options.onMainMenu;
-    this.waves.setMaxWave(this.mode === 'standard' ? STANDARD_MAX_WAVE : null);
+    this.mode = this.runConfig.mode;
+    this.waves.setRunConfig(this.runConfig);
     const saveData = this.saves.load();
     audioManager.applySettings(saveData.settings);
     audioManager.playMusic('run-ambient');
     this.state.autoStartEnabled = saveData.settings.autoStart;
+    this.state.stability = this.modifiedStartingStability();
+    this.state.memory = this.modifiedStartingMemory();
+    this.balance.setChallengeModifiers(this.runConfig.synergyPowerModifier ?? 1, this.runConfig.singleEmotionPenaltyModifier ?? 1);
+    this.synergies.setPowerModifier(this.runConfig.synergyPowerModifier ?? 1);
     this.root = new Container();
     this.worldRoot = new Container();
     this.mapLayer = new Container();
@@ -183,6 +238,7 @@ export class Game {
     this.mapLayer.addChild(this.map.container);
 
     this.particles = new ParticleSystem();
+    this.particles.setVisualBudget(this.visualBudget);
     this.particles.setQuality(saveData.settings.quality);
     this.particlesLayer.addChild(this.particles.container);
 
@@ -194,6 +250,7 @@ export class Game {
     this.ghost.addChild(this.ghostRange, this.ghostBody);
     this.overlayLayer.addChild(this.ghost);
     this.overlayLayer.addChild(this.rangePreview);
+    this.overlayLayer.addChild(this.synergyLines);
 
     /* UI */
     this.hud = new HUD();
@@ -204,13 +261,31 @@ export class Game {
       onSpeedToggle: () => this.toggleSpeed(),
       onAutoStartToggle: () => this.toggleAutoStart(),
       onRestart: () => this.restart()
-    });
+    }, { allowedTowers: this.runConfig.allowedTowers });
     this.sidePanel = new SidePanel({
       onUpgrade: (path) => this.tryUpgradeSelected(path),
       onTargetingChange: (mode) => this.setSelectedTargetingMode(mode),
-      onSell: () => this.sellSelectedTower()
+      onSell: () => this.sellSelectedTower(),
+      onCopyRunSummary: () => this.copyRunSummary()
     });
-    this.uiLayer.addChild(this.hud.container, this.towerBar.container, this.sidePanel.container);
+    this.sidePanel.setRunConfig(this.runConfig, this.mapDefinition);
+    this.uiLayer.addChild(this.towerBar.container, this.sidePanel.container, this.hud.container);
+    if (import.meta.env.DEV) {
+      this.devTools = new DevToolsOverlay({
+        addMemory: (amount) => this.devAddMemory(amount),
+        healCore: () => this.devHealCore(),
+        damageCore: (amount) => this.devDamageCore(amount),
+        jumpToWave: (wave) => this.devJumpToWave(wave),
+        spawnEnemy: (kind) => this.devSpawnEnemy(kind),
+        copyRunSummary: () => this.copyRunSummary(),
+        killAllEnemies: () => this.devKillAllEnemies(),
+        logRunStats: () => this.devLogRunStats(),
+        logEconomyReport: () => this.devLogEconomyReport(),
+        snapshot: () => this.devSnapshot()
+      });
+      this.devTools.container.visible = false;
+      this.uiLayer.addChild(this.devTools.container);
+    }
 
     if (!saveData.tutorialCompleted) {
       this.state.autoStartEnabled = false;
@@ -220,14 +295,22 @@ export class Game {
     }
 
     this.attachInput();
+    window.addEventListener('emoticore:renderer-context-lost', this.handleRendererContextLost);
+    window.addEventListener('emoticore:renderer-context-restored', this.handleRendererContextRestored);
     this.app.stage.addChild(this.root);
 
+    if (this.resumeSave) {
+      this.restoreCurrentRun(this.resumeSave);
+    }
     this.refreshSidePanel();
     this.refreshUi();
     this.app.ticker.add(this.tick);
   }
 
   private applyQualitySettings(quality: QualitySetting): void {
+    this.currentQuality = quality;
+    this.renderCaps = getRenderCaps(quality);
+    this.map.setQuality(quality);
     this.particles.setQuality(quality);
     if (quality === 'low') {
       this.enemiesLayer.filters = [];
@@ -247,9 +330,27 @@ export class Game {
   destroy(): void {
     this.app.ticker.remove(this.tick);
     this.detachInput();
+    window.removeEventListener('emoticore:renderer-context-lost', this.handleRendererContextLost);
+    window.removeEventListener('emoticore:renderer-context-restored', this.handleRendererContextRestored);
     this.app.stage.removeChild(this.root);
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = null;
+    this.devTools = null;
     this.tutorial = null;
     this.root.destroy({ children: true });
+  }
+
+  private normalizedRunConfigForResume(config: RunConfig, save?: CurrentRunSave): RunConfig {
+    if (!save) return config;
+    const savedWave = Math.max(0, Math.floor(save.gameState.wave));
+    const shouldResumeAsEndless = config.mode === 'endless' || (config.maxWave !== undefined && savedWave >= config.maxWave);
+    if (!shouldResumeAsEndless) return config;
+    return {
+      ...config,
+      mode: 'endless',
+      maxWave: undefined,
+      rules: config.rules.includes('Waves keep scaling') ? config.rules : [...config.rules, 'Waves keep scaling']
+    };
   }
 
   /* ----------------------------- input ---------------------------- */
@@ -263,6 +364,9 @@ export class Game {
 
     window.addEventListener('keydown', this.handleKeyDown);
     window.addEventListener('contextmenu', this.handleContextMenu);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+    window.addEventListener('pagehide', this.handlePageHide);
+    window.addEventListener('beforeunload', this.handleBeforeUnload);
   }
 
   private detachInput() {
@@ -271,6 +375,9 @@ export class Game {
     this.app.stage.off('rightdown', this.handleRightDown);
     window.removeEventListener('keydown', this.handleKeyDown);
     window.removeEventListener('contextmenu', this.handleContextMenu);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
+    window.removeEventListener('pagehide', this.handlePageHide);
+    window.removeEventListener('beforeunload', this.handleBeforeUnload);
   }
 
   private onPointerMove(e: FederatedPointerEvent) {
@@ -282,9 +389,19 @@ export class Game {
   private onPointerDown(e: FederatedPointerEvent) {
     if (this.state.defeat || this.state.victory) return;
     const p = e.global;
+    this.pointer.x = p.x;
+    this.pointer.y = p.y;
+    this.updateHoverCell();
+
     const inField = p.x >= FIELD.x && p.x < FIELD.x + FIELD.width &&
                     p.y >= FIELD.y && p.y < FIELD.y + FIELD.height;
-    if (!inField) return;
+    if (!inField) {
+      if (!this.isUiPoint(p.x, p.y)) {
+        this.cancelPlacement();
+        this.deselectTower();
+      }
+      return;
+    }
 
     if (this.selectedTowerType) {
       this.tryPlace(p.x, p.y);
@@ -300,6 +417,10 @@ export class Game {
     }
   }
 
+  private isUiPoint(x: number, y: number): boolean {
+    return y >= CANVAS.height - CANVAS.towerBarHeight || x >= CANVAS.width - CANVAS.rightPanelWidth || y < CANVAS.hudHeight;
+  }
+
   private onKeyDown(e: KeyboardEvent) {
     if (e.code === 'Escape') {
       this.cancelPlacement();
@@ -313,15 +434,30 @@ export class Game {
       this.toggleSpeed();
     } else if (e.code === 'KeyR' && (this.state.defeat || this.state.victory)) {
       this.restart();
+    } else if (e.code === 'F2' || e.code === 'Backquote') {
+      e.preventDefault();
+      this.toggleDevTools();
     } else if (e.code.startsWith('Digit')) {
       const index = Number(e.code.slice(5)) - 1;
-      if (index >= 0 && index < EMOTION_TYPES.length) this.setSelectedType(EMOTION_TYPES[index]);
+      const type = this.towerBar.visibleTypeAt(index);
+      if (type) this.setSelectedType(type);
     }
+  }
+
+  private toggleDevTools() {
+    if (!this.devTools) return;
+    const next = !this.devTools.container.visible;
+    this.devTools.container.visible = next;
+    this.showStatusNotice(next ? 'DEV TOOLS ON' : 'DEV TOOLS OFF', 1.2);
   }
 
   /* --------------------------- placement -------------------------- */
 
   private setSelectedType(t: EmotionType | null) {
+    if (t && this.runConfig.allowedTowers && !this.runConfig.allowedTowers.includes(t)) {
+      this.showStatusNotice('Emotion locked by challenge rules', 1.2);
+      return;
+    }
     if (t && TOWER_STATS[t].cost > this.state.memory) {
       // still allow toggling, but ghost will show invalid
     }
@@ -379,9 +515,19 @@ export class Game {
     }
   }
 
-  private tryPlace(_wx: number, _wy: number) {
-    if (!this.selectedTowerType || !this.hoveredCell) return;
-    const { cx, cy } = this.hoveredCell;
+  private tryPlace(wx: number, wy: number) {
+    if (!this.selectedTowerType) return;
+    const targetCell = this.hoveredCell ?? this.map.worldToCell(wx, wy);
+    if (!targetCell) {
+      this.fizzle();
+      return;
+    }
+    if (this.runConfig.allowedTowers && !this.runConfig.allowedTowers.includes(this.selectedTowerType)) {
+      this.showStatusNotice('Emotion locked by challenge rules', 1.2);
+      this.cancelPlacement();
+      return;
+    }
+    const { cx, cy } = targetCell;
     if (!this.map.isPlaceable(cx, cy)) {
       this.showStatusNotice('Invalid build space');
       this.fizzle();
@@ -395,33 +541,39 @@ export class Game {
     }
     const center = this.map.cellCenter(cx, cy);
     const tower = new Tower(this.selectedTowerType, cx, cy, center.x, center.y);
-    tower.container.on('pointerdown', (e: FederatedPointerEvent) => {
-      e.stopPropagation();
-      this.selectTower(tower);
-    });
-    tower.container.on('pointerover', () => { tower.hovered = true; });
-    tower.container.on('pointerout',  () => { tower.hovered = false; });
+    this.wireTowerInput(tower);
     this.towers.push(tower);
     this.runStats.recordTowerBuilt(tower.type);
     this.towersLayer.addChild(tower.container);
     this.map.occupy(cx, cy);
     this.balance.add(this.selectedTowerType);
     this.refreshSynergies();
-    this.spendMemory(cost);
+    this.spendMemory(cost, 'tower');
     this.applyBalanceModifiers();
     audioManager.playSfx('tower-place');
     this.tutorial?.onTowerPlaced(tower.type, this.towers.length);
 
     // place flourish
     const c = EMOTION_COLOR[this.selectedTowerType];
-    this.particles.ring(center.x, center.y, { color: c, startRadius: 6, endRadius: 50, duration: 0.5, thickness: 2 });
+    this.particles.ring(center.x, center.y, { color: c, startRadius: 6, endRadius: 50, duration: 0.5, thickness: 2, important: true });
     this.particles.burst(center.x, center.y, {
       count: 12, color: c, speedMin: 60, speedMax: 200,
-      sizeMin: 1, sizeMax: 2.5, lifeMin: 0.3, lifeMax: 0.6, drag: 3
+      sizeMin: 1, sizeMax: 2.5, lifeMin: 0.3, lifeMax: 0.6, drag: 3, important: true
     });
 
     this.towerBar.setAffordability(this.state.memory);
     if (this.state.memory < cost) this.cancelPlacement();
+    this.saveCurrentRun();
+  }
+
+  private wireTowerInput(tower: Tower): void {
+    tower.container.removeAllListeners();
+    tower.container.on('pointerdown', (e: FederatedPointerEvent) => {
+      e.stopPropagation();
+      this.selectTower(tower);
+    });
+    tower.container.on('pointerover', () => { tower.hovered = true; });
+    tower.container.on('pointerout',  () => { tower.hovered = false; });
   }
 
   private fizzle() {
@@ -470,17 +622,19 @@ export class Game {
     }
     if (!tower.upgrade(path)) return;
     this.runStats.recordUpgradePurchased();
+    this.runStats.recordHighestUpgradeLevel(tower.getUpgradeState().level);
     audioManager.playSfx('tower-upgrade');
     this.tutorial?.onTowerUpgraded(path);
-    this.spendMemory(cost);
+    this.spendMemory(cost, 'upgrade');
     this.addCombatNotice(tower.x, tower.y - 30, 'UPGRADE', EMOTION_COLOR[tower.type], 1.0);
     const c = EMOTION_COLOR[tower.type];
-    this.particles.ring(tower.x, tower.y, { color: c, startRadius: 18, endRadius: 72, duration: 0.55, thickness: 2.5 });
+    this.particles.ring(tower.x, tower.y, { color: c, startRadius: 18, endRadius: 72, duration: 0.55, thickness: 2.5, important: true });
     this.particles.burst(tower.x, tower.y, {
       count: 18, color: c, speedMin: 70, speedMax: 220,
-      sizeMin: 1.2, sizeMax: 3, lifeMin: 0.28, lifeMax: 0.62, drag: 3, shape: 'spark'
+      sizeMin: 1.2, sizeMax: 3, lifeMin: 0.28, lifeMax: 0.62, drag: 3, shape: 'spark', important: true
     });
     this.refreshSidePanel();
+    this.saveCurrentRun();
   }
 
   private setSelectedTargetingMode(mode: TargetingMode) {
@@ -488,6 +642,7 @@ export class Game {
     this.selectedTower.setTargetingMode(mode);
     audioManager.playSfx('ui-click');
     this.refreshSidePanel();
+    this.saveCurrentRun();
   }
 
   private sellSelectedTower() {
@@ -507,6 +662,7 @@ export class Game {
     audioManager.playSfx('tower-sell');
     this.refreshSidePanel();
     this.refreshUi();
+    this.saveCurrentRun();
   }
 
   private findTowerAt(wx: number, wy: number): Tower | null {
@@ -525,15 +681,25 @@ export class Game {
   private tick = (ticker: Ticker) => {
     const rawDt = Math.min(0.05, ticker.deltaMS / 1000);
     this.updateStatusNotice(rawDt);
+    this.updateAutoSave(rawDt);
+    this.updateDevStabilityLog(rawDt);
+    this.updateHighLoadRecovery(rawDt);
+    if (this.rendererContextLost) {
+      this.devTools?.update(rawDt);
+      return;
+    }
     if (this.state.paused || this.state.defeat) {
       this.refreshUi();
+      this.devTools?.update(rawDt);
       return;
     }
     const dt = rawDt * this.state.speedMultiplier;
     this.update(dt);
+    this.devTools?.update(rawDt);
   };
 
   private update(dt: number) {
+    this.updateVisualBudget();
     if (this.state.bossIntroTimer > 0) {
       this.map.update(dt);
       this.updateBossIntro(dt);
@@ -549,7 +715,9 @@ export class Game {
     /* spawn from wave */
     if (!this.state.betweenWaves) {
       const spawns = this.waves.tick(dt);
-      for (const s of spawns) this.spawnEnemy(s.kind, s.hpScale);
+      for (const s of spawns) {
+        if (!this.spawnEnemy(s.kind, s.hpScale)) this.waves.deferSpawn(s);
+      }
     } else if (this.state.autoStartEnabled && this.state.autoStartIn > 0) {
       this.state.autoStartIn = Math.max(0, this.state.autoStartIn - dt);
       if (this.state.autoStartIn <= 0 && this.waves.nextDef()) this.startNextWave();
@@ -564,10 +732,19 @@ export class Game {
 
       if (this.waves.active && e.consumeSpawn(dt)) {
         // boss spawns
-        const child = new Enemy(this.waves.current >= 20 && Math.random() < 0.35 ? EnemyKind.EnvyLeech : EnemyKind.Doubtling, 1.0 + this.waves.current * 0.025);
-        child.traveled = e.traveled - 30; // just behind boss
-        this.enemies.push(child);
-        this.enemiesLayer.addChild(child.container);
+        if (this.enemies.length < this.renderCaps.maxSimultaneousEnemies) {
+          if (this.waves.current <= 10 && Math.random() < 0.55) continue;
+          const firstBossAdd = this.waves.current <= 10;
+          const childKind =
+            firstBossAdd ? (Math.random() < 0.65 ? EnemyKind.Fractureling : EnemyKind.Doubtling) :
+            this.waves.current >= 20 && Math.random() < 0.25 ? EnemyKind.PressureKnot :
+            this.waves.current >= 20 && Math.random() < 0.35 ? EnemyKind.EnvyLeech :
+            EnemyKind.Doubtling;
+          const child = new Enemy(childKind, firstBossAdd ? 0.72 : 1.0 + this.waves.current * 0.025);
+          child.traveled = e.traveled - 30; // just behind boss
+          this.enemies.push(child);
+          this.enemiesLayer.addChild(child.container);
+        }
       }
 
       if (e.consumeSplit()) {
@@ -576,36 +753,45 @@ export class Game {
 
       if (e.reachedCore) {
         this.coreHit(e.damage);
+        this.economyLog.recordEnemyLeaked();
         this.removeEnemy(e, false);
         continue;
       }
       if (!e.alive && !e.rewarded) {
         e.rewarded = true;
         this.runStats.recordKill(e.kind, e.bounty, this.waves.current);
-        this.gainMemory(e.bounty);
+        this.gainMemory(e.bounty, true, 'bounty');
         this.addCombatNotice(e.x, e.y - e.radius - 10, `+${e.bounty}`, 0xffd166, 0.9);
         if (e.kind === EnemyKind.ShameSwarm) this.triggerShamePulse(e);
         e.spawnDeathParticles(this.particles);
-        if (e.kind === EnemyKind.Spiral) this.shake(1.2);
+        if (isBossKind(e.kind)) this.shake(1.2);
         this.removeEnemy(e, true);
       }
     }
 
     this.updateSpiralDisruption(dt);
+    this.updateMaskResistance(dt);
+    this.updateBurnoutOverheat(dt);
     this.updateEnvyLeeches(dt);
     this.updateLowStabilityWarning(dt);
+    this.balance.updateFromTowers(this.towers);
     this.runStats.updateResonance(dt, this.balance.isResonating());
+    this.runStats.updateBalance(dt, this.balance.analysis());
 
     /* towers */
     const globalRateMul = this.balance.fireRateMul() * (this.balanceDisruption > 0 ? 1.08 : 1);
+    const simplifyTowers = this.towers.length > 80 || this.visualBudget.getLoadLevel() === 'high' || this.visualBudget.getLoadLevel() === 'extreme';
     for (const t of this.towers) {
       t.setSynergyModifiers(this.synergies.modifiersFor(t.type));
-      t.applyTowerAuras(this.towers, globalRateMul);
+      t.setSimplifiedVisuals(simplifyTowers && !t.selected && !t.hovered);
+      t.applyTowerAuras(this.towers, globalRateMul * this.balance.fireRateMulFor(t.type) * this.overheatMulForTower(t), this.balance.supportEffectMul());
       const specials = t.getSpecialStats();
       let damageMul = this.balance.damageMulFor(t.type);
       if (this.balance.isResonating()) damageMul *= specials.resonanceDamageMul;
       if (this.balanceDisruption > 0) damageMul *= 0.9;
-      t.setDamageMul(damageMul);
+      damageMul *= t.loveDamageMulFrom(this.towers);
+      damageMul *= t.prideIsolationMulFrom(this.towers);
+      t.setDamageMul(damageMul, this.damageBreakdownLinesForTower(t, damageMul));
       t.update(dt, this.enemies, this.particles, (p) => this.spawnProjectile(p));
     }
 
@@ -626,13 +812,14 @@ export class Game {
     }
 
     this.updateGroundEffects(dt);
+    this.updateOverheatZones(dt);
 
     /* particles */
     this.particles.update(dt);
     this.updateCombatNotices(dt);
 
     /* wave-end check */
-    if (this.waves.active && this.waves.isSpawningDone() && this.enemies.length === 0) {
+    if (this.canCompleteCurrentWave()) {
       this.completeWave();
     }
 
@@ -646,20 +833,212 @@ export class Game {
       this.worldRoot.x = 0; this.worldRoot.y = 0;
     }
 
+    this.drawSynergyLines();
     this.refreshUi();
   }
 
   /* ------------------------------------------------------------------ */
 
-  private spawnEnemy(kind: EnemyKind, hpScale = 1) {
+  private canCompleteCurrentWave(): boolean {
+    if (!this.waves.active || !this.waves.isSpawningDone() || this.enemies.length > 0) return false;
+    const currentDef = this.waves.currentDef();
+    if (currentDef?.isBoss && (this.waves.hasPendingBossSpawn() || this.bossIntroOverlay || this.bossIntroWave !== null)) {
+      return false;
+    }
+    return !this.enemies.some((enemy) => enemy.alive && isBossKind(enemy.kind));
+  }
+
+  /* ------------------------------------------------------------------ */
+
+  private drawSynergyLines() {
+    this.synergyLines.clear();
+    if (!this.selectedTower) return;
+    const t1 = this.selectedTower;
+    let drawn = 0;
+    for (const t2 of this.towers) {
+      if (t1 === t2) continue;
+      for (const syn of this.synergies.activeSynergies()) {
+        if ((syn.emotions[0] === t1.type && syn.emotions[1] === t2.type) ||
+            (syn.emotions[1] === t1.type && syn.emotions[0] === t2.type)) {
+          const r = syn.activationRadius ?? 170;
+          const dx = t1.x - t2.x;
+          const dy = t1.y - t2.y;
+          if (dx * dx + dy * dy <= r * r) {
+            this.synergyLines.moveTo(t1.x, t1.y)
+                .lineTo(t2.x, t2.y)
+                .stroke({ color: 0x77ffaa, width: 2, alpha: 0.35 });
+            drawn++;
+            break;
+          }
+        }
+      }
+      if (drawn >= 5) break;
+    }
+  }
+
+  private damageBreakdownLinesForTower(tower: Tower, totalMul: number): string[] {
+    const lines: string[] = [];
+    const balanceMul = this.balance.damageMulFor(tower.type);
+    if (Math.abs(balanceMul - 1) > 0.005) lines.push(`Balance: x${balanceMul.toFixed(2)}`);
+    for (const line of this.balance.towerImpactLines(tower.type)) lines.push(line);
+    if (this.balance.isResonating()) lines.push(`Resonance: x${tower.getSpecialStats().resonanceDamageMul.toFixed(2)}`);
+    if (this.balanceDisruption > 0) lines.push('Spiral disruption: x0.90');
+    const loveMul = tower.loveDamageMulFrom(this.towers);
+    if (Math.abs(loveMul - 1) > 0.005) lines.push(`Love support: x${loveMul.toFixed(2)}`);
+    const prideMul = tower.prideIsolationMulFrom(this.towers);
+    if (Math.abs(prideMul - 1) > 0.005) lines.push(`Pride isolated: x${prideMul.toFixed(2)}`);
+    for (const synergy of this.synergies.getAppliedSynergiesForTower(tower)) {
+      lines.push(`${synergy.label}: ${synergy.bonusLabel ?? synergy.description}`);
+    }
+    if (Math.abs(totalMul - 1) > 0.005 && lines.length === 0) lines.push(`Active multiplier: x${totalMul.toFixed(2)}`);
+    return lines;
+  }
+
+  private devAddMemory(amount: number): void {
+    this.gainMemory(amount, false);
+    this.showStatusNotice(`DEV +${amount} Memory`, 0.9);
+  }
+
+  private devHealCore(): void {
+    this.state.stability = this.modifiedStartingStability();
+    this.state.coreShield = 0;
+    this.map.redrawCore(1);
+    this.showStatusNotice('DEV Core healed', 0.9);
+    this.refreshUi();
+  }
+
+  private devDamageCore(amount: number): void {
+    this.coreHit(amount);
+    this.showStatusNotice(`DEV Core -${amount}`, 0.9);
+  }
+
+  private devJumpToWave(wave: number): void {
+    this.clearActiveEnemiesAndProjectiles();
+    this.hideVictoryOverlay();
+    this.hidePauseOverlay();
+    this.state.defeat = false;
+    this.state.victory = false;
+    this.state.paused = false;
+    this.state.betweenWaves = false;
+    this.state.autoStartIn = AUTO_START_SECONDS;
+    this.waves.setMaxWave(null);
+    this.waves.start(Math.max(1, Math.floor(wave)));
+    this.showStatusNotice(`DEV Wave ${this.waves.current}`, 1.1);
+    this.refreshSidePanel();
+    this.refreshUi();
+  }
+
+  private devSpawnEnemy(kind: EnemyKind): void {
+    this.spawnEnemy(kind, 1);
+    this.showStatusNotice(`DEV Spawn ${kind}`, 0.9);
+  }
+
+  private devKillAllEnemies(): void {
+    this.clearActiveEnemiesAndProjectiles();
+    this.showStatusNotice('DEV Enemies cleared', 0.9);
+    this.refreshUi();
+  }
+
+  private devLogRunStats(): void {
+    console.info('[EMOTICORE TD] RunStats', JSON.stringify(this.runStats.toJson(), null, 2));
+    this.showStatusNotice('DEV RunStats logged', 0.9);
+  }
+
+  /** Build a self-contained snapshot of the current run for playtesters.
+   *  Combines RunConfig, map metadata and RunStats so a paste in the
+   *  feedback template captures everything needed to reproduce the run. */
+  private buildRunSnapshotJson(): string {
+    const result = this.state.victory ? 'victory' : this.state.defeat ? 'defeat' : 'in_progress';
+    const payload = {
+      game: 'emoticore-td',
+      version: APP_VERSION,
+      endedAt: new Date().toISOString(),
+      result,
+      wave: this.waves.current,
+      stability: this.state.stability,
+      maxStability: this.modifiedStartingStability(),
+      memory: this.state.memory,
+      config: {
+        mode: this.runConfig.mode,
+        seed: this.runConfig.seed,
+        rules: this.runConfig.rules,
+        allowedTowers: this.runConfig.allowedTowers,
+        map: { id: this.mapDefinition.id, name: this.mapDefinition.name, theme: this.mapDefinition.theme }
+      },
+      stats: this.runStats.toJson(),
+      balance: this.balance.analysis()
+    };
+    return JSON.stringify(payload, null, 2);
+  }
+
+  /** Copy the current run summary to the clipboard, with a console fallback. */
+  copyRunSummary(): void {
+    const json = this.buildRunSnapshotJson();
+    const onSuccess = () => this.showStatusNotice('Run summary copied', 1.4);
+    const onFallback = () => {
+      console.info('[EMOTICORE TD] Run summary (clipboard unavailable)\n' + json);
+      this.showStatusNotice('Run summary in console', 1.6);
+    };
+    const clipboard = (typeof navigator !== 'undefined' ? navigator.clipboard : null);
+    if (clipboard?.writeText) {
+      clipboard.writeText(json).then(onSuccess).catch(onFallback);
+    } else {
+      onFallback();
+    }
+  }
+
+  private devLogEconomyReport(): void {
+    this.economyLog.logReport();
+    this.showStatusNotice('DEV Economy Report logged', 0.9);
+  }
+
+  private devSnapshot(): DevToolsSnapshot {
+    const particleCounts = this.particles.counts();
+    return {
+      wave: this.waves.current,
+      memory: this.state.memory,
+      stability: this.state.stability,
+      maxStability: this.modifiedStartingStability(),
+      enemies: this.enemies.length,
+      towers: this.towers.length,
+      projectiles: this.projectiles.length,
+      particles: particleCounts.particles,
+      visualSkipRate: this.visualBudget.getSkipRate(),
+      visualLoadLevel: this.visualBudget.getLoadLevel(),
+      quality: this.currentQuality,
+      contextLostCount: this.contextLostCount,
+      score: this.runStats.score
+    };
+  }
+
+  private clearActiveEnemiesAndProjectiles(): void {
+    for (const e of this.enemies) {
+      this.enemiesLayer.removeChild(e.container);
+      e.destroy();
+    }
+    for (const p of this.projectiles) {
+      this.projectilesLayer.removeChild(p.container);
+      p.destroy();
+    }
+    this.enemies = [];
+    this.projectiles = [];
+  }
+
+  private spawnEnemy(kind: EnemyKind, hpScale = 1): boolean {
+    if (!isBossKind(kind) && this.enemies.length >= this.renderCaps.maxSimultaneousEnemies) return false;
+    if (!isBossKind(kind)) hpScale *= this.balance.enemyHpMul();
     const e = new Enemy(kind, hpScale);
+    e.baseSpeed *= this.runConfig.enemySpeedModifier ?? 1;
+    e.bounty = Math.max(0, Math.round(e.bounty * (this.runConfig.bountyModifier ?? 1)));
     this.enemies.push(e);
     this.enemiesLayer.addChild(e.container);
+    return true;
   }
 
   private spawnOverthinkerChildren(source: Enemy) {
     const count = this.waves.current >= 28 ? 3 : 2;
     for (let n = 0; n < count; n++) {
+      if (this.enemies.length >= this.renderCaps.maxSimultaneousEnemies) break;
       const kind = this.waves.current >= 25 && n === count - 1 ? EnemyKind.ShameSwarm : EnemyKind.Doubtling;
       const child = new Enemy(kind, 0.82 + this.waves.current * 0.018);
       child.traveled = Math.max(0, source.traveled - 28 - n * 14);
@@ -678,25 +1057,62 @@ export class Game {
   }
 
   private spawnProjectile(p: Projectile) {
+    if (this.projectiles.length >= this.renderCaps.maxProjectiles) {
+      p.destroy();
+      if (this.currentQuality !== 'low') this.panicRecovery('projectile cap reached');
+      return;
+    }
     this.projectiles.push(p);
     this.projectilesLayer.addChild(p.container);
   }
 
   private applyDamage(target: Enemy, packet: DamagePacket) {
+    const adjusted = { ...packet };
+    adjusted.amount *= this.balance.damageTakenMulForSource(adjusted.source);
+    const controlMul = TOWER_STATS[adjusted.source]?.category === 'control' ? this.balance.controlEffectMul() : 1;
+    if (controlMul < 1) {
+      if (adjusted.slow !== undefined) adjusted.slow = 1 - ((1 - adjusted.slow) * controlMul);
+      if (adjusted.slowDuration !== undefined) adjusted.slowDuration *= controlMul;
+      if (adjusted.stunDuration !== undefined) adjusted.stunDuration *= controlMul;
+      if (adjusted.fearChance !== undefined) adjusted.fearChance *= controlMul;
+    }
+    if (adjusted.shameGroupRadius !== undefined && adjusted.shameGroupDamageMul !== undefined) {
+      const r2 = adjusted.shameGroupRadius * adjusted.shameGroupRadius;
+      let packed = 0;
+      for (const e of this.enemies) {
+        if (!e.alive) continue;
+        const dx = e.x - target.x;
+        const dy = e.y - target.y;
+        if (dx * dx + dy * dy <= r2) packed++;
+      }
+      if (packed >= 3) adjusted.amount *= adjusted.shameGroupDamageMul;
+    }
+    if (target.kind === EnemyKind.Mask && this.maskResistEmotion === adjusted.source && this.maskResistTimer > 0) {
+      adjusted.amount *= 0.42;
+      if (Math.random() < 0.18) {
+        this.particles.ring(target.x, target.y, { color: EMOTION_COLOR[adjusted.source], startRadius: 10, endRadius: 42, duration: 0.25, thickness: 2, alpha: 0.55, visualKind: 'impact' });
+      }
+    }
     const before = target.hp;
-    target.takeDamage(packet);
+    target.takeDamage(adjusted);
     const dealt = Math.max(0, before - Math.max(0, target.hp));
-    this.runStats.recordDamage(packet.source, dealt);
-    if (packet.coreShield !== undefined && dealt > 0) {
-      const bonus = packet.source === EmotionType.Trust && (target.kind === EnemyKind.PanicRunner || target.kind === EnemyKind.VoidWraith) ? 1.65 : 1;
-      this.state.coreShield = Math.min(8, this.state.coreShield + packet.coreShield * bonus);
+    this.runStats.recordDamage(adjusted.source, dealt);
+    if (adjusted.coreShield !== undefined && dealt > 0) {
+      const bonus = adjusted.source === EmotionType.Trust && (target.kind === EnemyKind.PanicRunner || target.kind === EnemyKind.VoidWraith) ? 1.65 : 1;
+      this.state.coreShield = Math.min(ECONOMY.coreShieldMax, this.state.coreShield + adjusted.coreShield * bonus);
     }
     if (dealt >= 1) {
-      this.addCombatNotice(target.x, target.y - target.radius - 12, `-${Math.round(dealt)}`, EMOTION_COLOR[packet.source], 0.55);
+      this.addCombatNotice(target.x, target.y - target.radius - 12, `-${Math.round(dealt)}`, EMOTION_COLOR[adjusted.source], 0.55);
     }
   }
 
   private spawnGroundEffect(x: number, y: number, spec: BurnGroundSpec, source: EmotionType) {
+    while (this.groundEffects.length >= this.renderCaps.maxGroundEffects) {
+      const old = this.groundEffects.shift();
+      if (!old) break;
+      this.effectsLayer.removeChild(old.gfx);
+      old.gfx.destroy();
+    }
     const gfx = new Graphics();
     const effect: GroundEffect = {
       x, y,
@@ -751,6 +1167,52 @@ export class Game {
     g.circle(effect.x, effect.y, effect.radius).stroke({ color: 0xffd166, width: 1.4, alpha: 0.45 * (1 - t) });
   }
 
+  private spawnOverheatZone(x: number, y: number): void {
+    while (this.overheatZones.length >= this.renderCaps.maxOverheatZones) {
+      const old = this.overheatZones.shift();
+      if (!old) break;
+      this.effectsLayer.removeChild(old.gfx);
+      old.gfx.destroy();
+    }
+    const gfx = new Graphics();
+    const zone: OverheatZone = { x, y, radius: 86, duration: 5.5, remaining: 5.5, gfx };
+    this.effectsLayer.addChild(gfx);
+    this.overheatZones.push(zone);
+    this.drawOverheatZone(zone);
+  }
+
+  private updateOverheatZones(dt: number): void {
+    for (let i = this.overheatZones.length - 1; i >= 0; i--) {
+      const zone = this.overheatZones[i];
+      zone.remaining -= dt;
+      if (zone.remaining <= 0) {
+        this.effectsLayer.removeChild(zone.gfx);
+        zone.gfx.destroy();
+        this.overheatZones.splice(i, 1);
+      } else {
+        this.drawOverheatZone(zone);
+      }
+    }
+  }
+
+  private drawOverheatZone(zone: OverheatZone): void {
+    const t = 1 - zone.remaining / zone.duration;
+    const g = zone.gfx;
+    g.clear();
+    g.circle(zone.x, zone.y, zone.radius).fill({ color: 0xff5b3a, alpha: 0.09 + (1 - t) * 0.06 });
+    g.circle(zone.x, zone.y, zone.radius * (0.45 + 0.55 * t)).stroke({ color: 0xffd166, width: 2, alpha: 0.42 * (1 - t) });
+    g.circle(zone.x, zone.y, zone.radius).stroke({ color: 0xff5b3a, width: 1.6, alpha: 0.58 * (1 - t) });
+  }
+
+  private overheatMulForTower(tower: Tower): number {
+    for (const zone of this.overheatZones) {
+      const dx = tower.x - zone.x;
+      const dy = tower.y - zone.y;
+      if (dx * dx + dy * dy <= zone.radius * zone.radius) return 1.32;
+    }
+    return 1;
+  }
+
   private coreHit(amount: number) {
     if (this.state.coreShield > 0) {
       const absorbed = Math.min(amount, Math.floor(this.state.coreShield));
@@ -759,11 +1221,12 @@ export class Game {
         this.state.coreShield = Math.max(0, this.state.coreShield - absorbed);
         this.addCombatNotice(this.map.corePos.x, this.map.corePos.y - 64, `-${absorbed} SHIELDED`, EMOTION_COLOR[EmotionType.Trust], 1.0);
         this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
-          color: EMOTION_COLOR[EmotionType.Trust], startRadius: 18, endRadius: 78, duration: 0.45, thickness: 2.5
+          color: EMOTION_COLOR[EmotionType.Trust], startRadius: 18, endRadius: 78, duration: 0.45, thickness: 2.5, important: true
         });
       }
     }
     if (amount <= 0) return;
+    amount = Math.max(1, Math.ceil(amount * this.balance.coreDamageMul()));
     this.runStats.recordCoreDamage(amount);
     this.state.stability = Math.max(0, this.state.stability - amount);
     this.shake(amount * 0.5);
@@ -771,25 +1234,33 @@ export class Game {
       count: 22, color: 0xff5577,
       speedMin: 80, speedMax: 320,
       sizeMin: 1.5, sizeMax: 3.5,
-      lifeMin: 0.4, lifeMax: 0.8, drag: 3
+      lifeMin: 0.4, lifeMax: 0.8, drag: 3, important: true
     });
     this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
-      color: 0xff5577, startRadius: 24, endRadius: 90, duration: 0.5, thickness: 3
+      color: 0xff5577, startRadius: 24, endRadius: 90, duration: 0.5, thickness: 3, important: true
     });
     audioManager.playSfx('core-hit');
-    this.map.redrawCore(this.state.stability / ECONOMY.startingStability);
+    this.map.redrawCore(this.state.stability / this.modifiedStartingStability());
     this.addCombatNotice(this.map.corePos.x, this.map.corePos.y - 46, `-${amount} STABILITY`, 0xff5577, 1.0);
+    this.economyLog.recordCoreDamage(amount);
     if (this.state.stability <= 0) this.lose();
   }
 
-  private gainMemory(amount: number, countStats = true) {
+  private gainMemory(amount: number, countStats = true, source: 'bounty' | 'bonus' | 'interest' | 'other' = 'other') {
     this.state.memory += amount;
-    if (countStats) this.runStats.recordMemoryEarned(amount);
+    if (countStats) {
+      this.runStats.recordMemoryEarned(amount);
+      if (source === 'bounty')   this.economyLog.recordBounty(amount);
+      if (source === 'bonus')    this.economyLog.recordWaveBonus(amount);
+      if (source === 'interest') this.economyLog.recordInterest(amount);
+    }
     this.refreshEconomyUi();
   }
 
-  private spendMemory(amount: number) {
+  private spendMemory(amount: number, purpose: 'tower' | 'upgrade' = 'tower') {
     this.state.memory = Math.max(0, this.state.memory - amount);
+    if (purpose === 'tower')   this.economyLog.recordSpentTower(amount);
+    if (purpose === 'upgrade') this.economyLog.recordSpentUpgrade(amount);
     this.refreshEconomyUi();
   }
 
@@ -813,14 +1284,16 @@ export class Game {
     const def = this.waves.nextDef();
     if (!def) return;
     if (def.isBoss) {
-      this.showBossIntro(next, 'THE SPIRAL');
+      this.showBossIntro(next, bossKindForWave(next, this.runConfig.bossFrequency ?? 10));
       return;
     }
     this.beginWave(next, false);
   }
 
-  private showBossIntro(wave: number, bossName: string): void {
+  private showBossIntro(wave: number, bossKind: EnemyKind): void {
     if (this.bossIntroOverlay) return;
+    const bossInfo = BOSS_WARNING_COPY[bossKind] ?? BOSS_WARNING_COPY[EnemyKind.Spiral]!;
+    const lore = bossLore[bossKind];
     this.bossIntroWave = wave;
     this.state.bossIntroTimer = 2.45;
     this.state.autoStartIn = AUTO_START_SECONDS;
@@ -841,7 +1314,7 @@ export class Game {
     waveText.anchor.set(0.5);
     waveText.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 - 86);
 
-    const name = makeHeadline(bossName, {
+    const name = makeHeadline(lore?.name ?? bossInfo.name, {
       fontSize: 48,
       fontWeight: '900',
       letterSpacing: 8,
@@ -852,12 +1325,35 @@ export class Game {
     name.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 - 24);
     name.label = 'boss-intro-name';
 
-    const sub = makeText('EMOTIONAL COLLAPSE DETECTED', { fontSize: 12, fontWeight: '700', letterSpacing: 3, fill: 0x6cf0ff });
+    const sub = makeText(lore?.introLine ?? 'EMOTIONAL COLLAPSE DETECTED', { fontSize: 12, fontWeight: '700', letterSpacing: 3, fill: 0x6cf0ff });
     sub.anchor.set(0.5);
     sub.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 + 38);
     sub.label = 'boss-intro-sub';
 
-    overlay.addChild(tint, ring, waveText, name, sub);
+    const mechanic = makeText(lore?.mechanicLine ?? bossInfo.mechanic, {
+      fontSize: 13,
+      fill: COLORS.text,
+      align: 'center',
+      wordWrap: true,
+      wordWrapWidth: 520,
+      lineHeight: 18
+    });
+    mechanic.anchor.set(0.5);
+    mechanic.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 + 76);
+
+    const counter = makeText(`Counter: ${lore?.counterHint ?? bossInfo.counter}`, {
+      fontSize: 12,
+      fontWeight: '700',
+      fill: COLORS.warn,
+      align: 'center',
+      wordWrap: true,
+      wordWrapWidth: 560,
+      lineHeight: 17
+    });
+    counter.anchor.set(0.5);
+    counter.position.set(CANVAS.width / 2 - CANVAS.rightPanelWidth / 2, CANVAS.height / 2 + 126);
+
+    overlay.addChild(tint, ring, waveText, name, sub, mechanic, counter);
     this.bossIntroOverlay = overlay;
     this.uiLayer.addChild(overlay);
     this.shake(0.8);
@@ -908,32 +1404,62 @@ export class Game {
   }
 
   private beginWave(next: number, boss: boolean) {
+    this.economyLog.beginWave(
+      next,
+      this.state.memory,
+      this.towers.length,
+      this.runStats.upgradesPurchased,
+      this.synergies.activeCount()
+    );
     this.waves.start(next);
     audioManager.playSfx('wave-start');
     this.tutorial?.onWaveStarted();
     this.state.betweenWaves = false;
     this.state.autoStartIn = AUTO_START_SECONDS;
     if (boss) this.showStatusNotice('BOSS WAVE INCOMING', 2.5);
+    else this.showWaveLore(next);
     this.refreshSidePanel();
+    this.saveCurrentRun();
+  }
+
+  private showWaveLore(wave: number): void {
+    const message = waveLoreMessages[wave];
+    if (!message) return;
+    this.showStatusNotice(message, wave >= 40 ? 3.2 : 2.6);
   }
 
   private completeWave() {
     this.waves.endWave();
     const def = this.waves.currentDef();
-    const bonus = (def?.bonusMemory ?? 0) + ECONOMY.waveCompleteBonus;
-    const interest = Math.floor(this.state.memory * ECONOMY.interestPerWave);
-    this.gainMemory(bonus + interest);
+    const bonus = (def?.bonusMemory ?? 0) + Math.floor(ECONOMY.waveCompleteBonus * (this.runConfig.waveBonusModifier ?? 1));
+    const rawInterest = Math.floor(this.state.memory * ECONOMY.interestPerWave);
+    const interest = Math.min(rawInterest, ECONOMY.interestCap);
+    this.gainMemory(bonus, true, 'bonus');
+    this.gainMemory(interest, true, 'interest');
     this.runStats.recordWaveComplete(this.waves.current, !!def?.isBoss);
+
+    // close out the economy row for this wave
+    const maxUpgLevel = this.towers.reduce((max, t) => {
+      return Math.max(max, t.getUpgradeState().level);
+    }, 0);
+    this.economyLog.endWave(
+      this.state.memory,
+      this.towers.length,
+      this.runStats.upgradesPurchased,
+      maxUpgLevel
+    );
+
     this.restoreStabilityFromCalm();
     this.state.betweenWaves = true;
     this.state.autoStartIn = AUTO_START_SECONDS;
     this.showStatusNotice(`Wave ${this.waves.current} complete: +${bonus + interest} Memory`, 1.8);
     audioManager.playSfx('wave-complete');
-    if (this.mode === 'standard' && this.waves.isLast()) {
+    if (this.runConfig.maxWave !== undefined && this.waves.isLast()) {
       this.win();
       return;
     }
     this.refreshSidePanel();
+    this.saveCurrentRun();
   }
 
   private applyBalanceModifiers() {
@@ -985,6 +1511,47 @@ export class Game {
     });
   }
 
+  private updateMaskResistance(dt: number) {
+    const mask = this.enemies.find(e => e.kind === EnemyKind.Mask && e.alive);
+    if (!this.waves.active || !mask) {
+      this.maskResistTimer = 0;
+      this.maskResistEmotion = null;
+      return;
+    }
+    this.maskResistTimer -= dt;
+    if (this.maskResistTimer > 0 && this.maskResistEmotion) return;
+    const top = this.runStats.summary().topDamageEmotion;
+    if (!top) {
+      this.maskResistTimer = 2.5;
+      return;
+    }
+    this.maskResistEmotion = top;
+    this.maskResistTimer = 5.8;
+    this.showStatusNotice(`THE MASK resists ${top.toUpperCase()}`, 1.6);
+    this.particles.ring(mask.x, mask.y, {
+      color: EMOTION_COLOR[top], startRadius: 24, endRadius: 130, duration: 0.65, thickness: 3, alpha: 0.82
+    });
+  }
+
+  private updateBurnoutOverheat(dt: number) {
+    const burnout = this.enemies.find(e => e.kind === EnemyKind.BurnoutBoss && e.alive);
+    if (!this.waves.active || !burnout) {
+      this.burnoutZoneTimer = 4.5;
+      return;
+    }
+    this.burnoutZoneTimer -= dt;
+    if (this.burnoutZoneTimer > 0) return;
+    this.burnoutZoneTimer = 5.8;
+    const target = this.towers.length > 0
+      ? this.towers[Math.floor(Math.random() * this.towers.length)]
+      : null;
+    const x = target ? target.x : burnout.x;
+    const y = target ? target.y : burnout.y;
+    this.spawnOverheatZone(x, y);
+    this.showStatusNotice('THE BURNOUT creates an Overheat zone', 1.6);
+    this.shake(0.45);
+  }
+
   private updateEnvyLeeches(dt: number) {
     if (this.leechNoticeTimer > 0) this.leechNoticeTimer = Math.max(0, this.leechNoticeTimer - dt);
     for (const e of this.enemies) {
@@ -1010,7 +1577,7 @@ export class Game {
   }
 
   private updateLowStabilityWarning(dt: number): void {
-    const ratio = this.state.stability / ECONOMY.startingStability;
+    const ratio = this.state.stability / this.modifiedStartingStability();
     if (ratio >= 0.35 || this.state.defeat || this.state.victory) {
       this.lowStabilityPulseTimer = 0;
       return;
@@ -1031,12 +1598,16 @@ export class Game {
 
   private restoreStabilityFromCalm() {
     if (this.state.stability <= 0) return;
-    const restore = this.towers.reduce((sum, t) => sum + t.getSpecialStats().stabilityOnWaveComplete, 0);
-    if (restore <= 0 || this.state.stability >= ECONOMY.startingStability) return;
+    const restore = Math.min(
+      ECONOMY.stabilityRegenCapPerWave,
+      this.towers.reduce((sum, t) => sum + t.getSpecialStats().stabilityOnWaveComplete, 0)
+    );
+    const maxStability = this.modifiedStartingStability();
+    if (restore <= 0 || this.state.stability >= maxStability) return;
     const before = this.state.stability;
-    this.state.stability = Math.min(ECONOMY.startingStability, this.state.stability + restore);
+    this.state.stability = Math.min(maxStability, this.state.stability + restore);
     if (this.state.stability === before) return;
-    this.map.redrawCore(this.state.stability / ECONOMY.startingStability);
+    this.map.redrawCore(this.state.stability / maxStability);
     this.addCombatNotice(this.map.corePos.x, this.map.corePos.y - 46, `+${this.state.stability - before} STABILITY`, EMOTION_COLOR[EmotionType.Calm], 1.0);
     this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
       color: EMOTION_COLOR[EmotionType.Calm], startRadius: 24, endRadius: 100, duration: 0.65, thickness: 2.5
@@ -1050,29 +1621,36 @@ export class Game {
 
   private lose() {
     if (this.state.defeat) return;
+    this.balance.updateFromTowers(this.towers);
+    this.runStats.recordFinalBalance(this.balance.analysis());
     this.state.defeat = true;
-    this.saves.recordRun(this.waves.current, this.calculateScore());
+    this.saves.clearCurrentRun();
+    this.saves.recordChallengeRun(this.runConfig.mode, this.runConfig.mapId, this.waves.current, this.calculateScore(), this.runConfig.seed);
     audioManager.playSfx('game-over');
     audioManager.playMusic('game-over');
     this.sidePanel.showDefeat(this.waves.current, this.runStats.summary());
+    this.economyLog.logSummary(`DEFEAT — Wave ${this.waves.current}`);
     this.showStatusNotice('Defeat - restart is available', 5);
     this.refreshUi();
     this.shake(2);
-    this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
-      color: 0xff5577, startRadius: 30, endRadius: 220, duration: 1.4, thickness: 5
-    });
+    this.playCoreCollapseAnimation();
+    this.maybeOpenScoreSubmit('defeat');
   }
 
   private win() {
     if (this.state.victory) return;
+    this.balance.updateFromTowers(this.towers);
+    this.runStats.recordFinalBalance(this.balance.analysis());
     this.state.victory = true;
+    this.saves.clearCurrentRun();
     this.state.paused = false;
     this.state.autoStartIn = 0;
     this.runStats.recordVictory(this.state.stability);
-    this.saves.recordRun(this.waves.current, this.calculateScore());
+    this.saves.recordChallengeRun(this.runConfig.mode, this.runConfig.mapId, this.waves.current, this.calculateScore(), this.runConfig.seed);
     audioManager.playSfx('victory');
     audioManager.playMusic('victory');
     this.sidePanel.showVictory(this.runStats.summary());
+    this.economyLog.logSummary('VICTORY');
     this.showStatusNotice('Victory - Core stabilized', 5);
     this.showVictoryOverlay();
     this.refreshUi();
@@ -1080,19 +1658,106 @@ export class Game {
     this.particles.ring(this.map.corePos.x, this.map.corePos.y, {
       color: 0x77ffaa, startRadius: 28, endRadius: 240, duration: 1.2, thickness: 4
     });
+    this.maybeOpenScoreSubmit('victory');
+  }
+
+  private maybeOpenScoreSubmit(result: 'victory' | 'defeat'): void {
+    if (this.scoreSubmittedForRun) return;
+    const score = this.calculateScore();
+    if (score <= 0) return;
+    if (this.waves.current <= 0) return;
+    this.scoreSubmittedForRun = true;
+    const summary = this.runStats.summary();
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = new ScoreSubmitOverlay({
+      payload: {
+        score,
+        wave: this.waves.current,
+        mapId: this.mapDefinition.id,
+        mapName: this.mapDefinition.name,
+        mode: this.mode,
+        result,
+        stats: {
+          towersUsed: this.towers.length,
+          upgradesPurchased: summary.upgradesPurchased,
+          killsTotal: summary.killsTotal,
+          bossKills: summary.bossKills,
+          topDamageEmotion: summary.topDamageEmotion ?? undefined
+        },
+        clientVersion: APP_VERSION
+      },
+      onClose: () => { this.scoreSubmit = null; }
+    });
+    this.scoreSubmit.mount();
+  }
+
+  private playCoreCollapseAnimation(): void {
+    const x = this.map.corePos.x;
+    const y = this.map.corePos.y;
+    this.particles.burst(x, y, {
+      count: 96,
+      color: 0xff5577,
+      speedMin: 140,
+      speedMax: 520,
+      sizeMin: 2,
+      sizeMax: 5,
+      lifeMin: 0.55,
+      lifeMax: 1.45,
+      drag: 2,
+      shape: 'shard',
+      important: true
+    });
+    this.particles.burst(x, y, {
+      count: 42,
+      color: 0x6cf0ff,
+      speedMin: 80,
+      speedMax: 360,
+      sizeMin: 1.4,
+      sizeMax: 3,
+      lifeMin: 0.35,
+      lifeMax: 0.95,
+      drag: 3,
+      shape: 'spark',
+      important: true
+    });
+    for (let i = 0; i < 5; i++) {
+      this.particles.ring(x, y, {
+        color: i % 2 === 0 ? 0xff5577 : 0x6cf0ff,
+        startRadius: 18 + i * 14,
+        endRadius: 170 + i * 54,
+        duration: 0.55 + i * 0.18,
+        thickness: Math.max(1.5, 5 - i * 0.7),
+        alpha: 0.9 - i * 0.12,
+        important: true
+      });
+    }
+    for (let i = 0; i < 12; i++) {
+      const a = i * Math.PI * 2 / 12;
+      const sx = x + Math.cos(a) * 22;
+      const sy = y + Math.sin(a) * 22;
+      const ex = x + Math.cos(a) * (110 + (i % 3) * 34);
+      const ey = y + Math.sin(a) * (110 + (i % 3) * 34);
+      for (let n = 0; n < 4; n++) {
+        const t = n / 3;
+        this.particles.trail(sx + (ex - sx) * t, sy + (ey - sy) * t, i % 2 === 0 ? 0xff5577 : 0xffd166, 3.4);
+      }
+    }
   }
 
   private refreshSidePanel() {
     if (this.state.victory) { this.sidePanel.showVictory(this.runStats.summary()); return; }
     if (this.state.defeat)  { this.sidePanel.showDefeat(this.waves.current, this.runStats.summary());  return; }
     if (this.selectedTowerType) {
+      this.sidePanel.setActiveSynergies(this.synergies.activeSynergies().filter((synergy) => synergy.emotions.includes(this.selectedTowerType!)));
       this.sidePanel.showSelectedType(this.selectedTowerType, this.state.memory >= TOWER_STATS[this.selectedTowerType].cost);
       return;
     }
     if (this.selectedTower) {
+      this.sidePanel.setActiveSynergies(this.synergies.getAppliedSynergiesForTower(this.selectedTower));
       this.sidePanel.showSelectedTower(this.selectedTower, this.state.memory);
       return;
     }
+    this.sidePanel.setActiveSynergies(this.synergies.activeSynergies());
     this.sidePanel.showWavePreview(this.waves.nextDef(), this.waves.currentDef(), this.state.betweenWaves);
   }
 
@@ -1102,10 +1767,11 @@ export class Game {
     if (this.state.paused) this.showPauseOverlay();
     else this.hidePauseOverlay();
     this.refreshUi();
+    this.saveCurrentRun();
   }
 
   private toggleSpeed() {
-    this.state.speedMultiplier = this.state.speedMultiplier === 1 ? 2 : 1;
+    this.state.speedMultiplier = this.state.speedMultiplier === 1 ? 2 : this.state.speedMultiplier === 2 ? 3 : 1;
     this.refreshUi();
   }
 
@@ -1117,6 +1783,10 @@ export class Game {
   }
 
   private restart(mode: GameMode = this.mode) {
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = null;
+    this.scoreSubmittedForRun = false;
+    this.saves.clearCurrentRun();
     for (const t of this.towers) {
       this.map.release(t.cx, t.cy);
       t.destroy();
@@ -1124,6 +1794,7 @@ export class Game {
     for (const e of this.enemies) e.destroy();
     for (const p of this.projectiles) p.destroy();
     for (const effect of this.groundEffects) effect.gfx.destroy();
+    for (const zone of this.overheatZones) zone.gfx.destroy();
     for (const n of this.combatNotices) n.text.destroy();
     if (this.bossIntroOverlay) {
       this.uiLayer.removeChild(this.bossIntroOverlay);
@@ -1135,6 +1806,7 @@ export class Game {
     this.enemies = [];
     this.projectiles = [];
     this.groundEffects = [];
+    this.overheatZones = [];
     this.combatNotices = [];
     this.towersLayer.removeChildren();
     this.enemiesLayer.removeChildren();
@@ -1146,6 +1818,7 @@ export class Game {
     this.particlesLayer.removeChild(this.particles.container);
     this.particles.container.destroy({ children: true });
     this.particles = new ParticleSystem();
+    this.particles.setVisualBudget(this.visualBudget);
     this.particles.setQuality(this.saves.load().settings.quality);
     this.particlesLayer.addChild(this.particles.container);
     this.applyQualitySettings(this.saves.load().settings.quality);
@@ -1153,10 +1826,10 @@ export class Game {
     const keepSpeed = this.state.speedMultiplier;
     const keepAuto = this.state.autoStartEnabled;
     this.mode = mode;
-    this.waves.setMaxWave(this.mode === 'standard' ? STANDARD_MAX_WAVE : null);
+    this.waves.setRunConfig(this.runConfig);
     this.state = {
-      stability: ECONOMY.startingStability,
-      memory: ECONOMY.startingMemory,
+      stability: this.modifiedStartingStability(),
+      memory: this.modifiedStartingMemory(),
       paused: false,
       speedMultiplier: keepSpeed,
       autoStartEnabled: keepAuto,
@@ -1172,12 +1845,18 @@ export class Game {
     };
     this.waves.reset();
     this.balance = new EmotionalBalance();
+    this.balance.setChallengeModifiers(this.runConfig.synergyPowerModifier ?? 1, this.runConfig.singleEmotionPenaltyModifier ?? 1);
     this.synergies = new SynergySystem();
+    this.synergies.setPowerModifier(this.runConfig.synergyPowerModifier ?? 1);
     this.runStats = new RunStats();
+    this.economyLog.reset();
     this.sidePanel.setActiveSynergies([]);
     this.balanceDisruption = 0;
     this.leechNoticeTimer = 0;
     this.spiralPulseTimer = 5;
+    this.maskResistTimer = 0;
+    this.maskResistEmotion = null;
+    this.burnoutZoneTimer = 4.5;
     this.bossIntroWave = null;
     this.lowStabilityPulseTimer = 0;
     this.selectedTowerType = null;
@@ -1193,6 +1872,9 @@ export class Game {
   }
 
   private continueEndless() {
+    this.scoreSubmit?.destroy();
+    this.scoreSubmit = null;
+    this.scoreSubmittedForRun = false;
     this.mode = 'endless';
     this.waves.setMaxWave(null);
     this.state.victory = false;
@@ -1203,6 +1885,7 @@ export class Game {
     this.showStatusNotice('Endless mode unlocked - Wave 31 awaits', 2.2);
     this.refreshSidePanel();
     this.refreshUi();
+    this.saveCurrentRun();
   }
 
   private showVictoryOverlay() {
@@ -1281,7 +1964,7 @@ export class Game {
     veil.rect(0, 0, CANVAS.width, CANVAS.height).fill({ color: 0x020409, alpha: 0.52 });
 
     const panel = new Graphics();
-    panel.roundRect(-220, -120, 440, 240, 8)
+    panel.roundRect(-240, -150, 480, 300, 8)
       .fill({ color: 0x05070d, alpha: 0.98 })
       .stroke({ color: COLORS.warn, width: 2, alpha: 0.95 });
 
@@ -1294,19 +1977,21 @@ export class Game {
     title.anchor.set(0.5);
     title.position.set(0, -72);
 
-    const resume = this.createOverlayButton('RESUME', 0, -16, 0x77ffaa, () => this.resumeFromOverlay());
-    const restart = this.createOverlayButton('RESTART', -95, 48, COLORS.warn, () => this.restart(this.mode));
-    const menu = this.createOverlayButton('MAIN MENU', 95, 48, COLORS.pathCore, () => this.onMainMenu?.());
+    const resume = this.createOverlayButton('RESUME', 0, -44, 0x77ffaa, () => this.resumeFromOverlay());
+    const saveQuit = this.createOverlayButton('SAVE & QUIT', 0, 14, COLORS.pathCore, () => this.saveAndQuit());
+    const restart = this.createOverlayButton('RESTART', -105, 74, COLORS.warn, () => this.restart(this.mode));
+    const abandon = this.createOverlayButton('ABANDON', 105, 74, COLORS.danger, () => this.showAbandonConfirm());
 
     const content = new Container();
     content.position.set(CANVAS.width / 2, CANVAS.height / 2);
-    content.addChild(panel, title, resume, restart, menu);
+    content.addChild(panel, title, resume, saveQuit, restart, abandon);
     overlay.addChild(veil, content);
     this.pauseOverlay = overlay;
     this.uiLayer.addChild(overlay);
   }
 
   private hidePauseOverlay() {
+    this.hideAbandonConfirm();
     if (!this.pauseOverlay) return;
     this.uiLayer.removeChild(this.pauseOverlay);
     this.pauseOverlay.destroy({ children: true });
@@ -1317,6 +2002,53 @@ export class Game {
     this.state.paused = false;
     this.hidePauseOverlay();
     this.refreshUi();
+    this.saveCurrentRun();
+  }
+
+  private saveAndQuit(): void {
+    this.saveCurrentRun();
+    this.onMainMenu?.();
+  }
+
+  private showAbandonConfirm(): void {
+    if (this.abandonConfirmOverlay) return;
+    const overlay = new Container();
+    overlay.eventMode = 'static';
+    overlay.hitArea = { contains: () => true } as any;
+    overlay.on('pointerdown', (e: FederatedPointerEvent) => e.stopPropagation());
+
+    const veil = new Graphics();
+    veil.rect(0, 0, CANVAS.width, CANVAS.height).fill({ color: 0x020409, alpha: 0.62 });
+    const panel = new Graphics();
+    panel.roundRect(-260, -92, 520, 184, 8)
+      .fill({ color: 0x05070d, alpha: 0.99 })
+      .stroke({ color: COLORS.danger, width: 2, alpha: 0.95 });
+    const title = makeHeadline('ABANDON RUN?', { fontSize: 24, fontWeight: '900', letterSpacing: 4, fill: COLORS.danger });
+    title.anchor.set(0.5);
+    title.position.set(0, -48);
+    const body = makeText('Your current run save will be deleted.\nThis will not record Victory or Game Over.', { fontSize: 12, fill: COLORS.textDim, align: 'center', lineHeight: 18 });
+    body.anchor.set(0.5);
+    body.position.set(0, -4);
+    const confirm = this.createOverlayButton('CONFIRM', -105, 58, COLORS.danger, () => this.abandonRun());
+    const cancel = this.createOverlayButton('CANCEL', 105, 58, COLORS.pathCore, () => this.hideAbandonConfirm());
+    const content = new Container();
+    content.position.set(CANVAS.width / 2, CANVAS.height / 2);
+    content.addChild(panel, title, body, confirm, cancel);
+    overlay.addChild(veil, content);
+    this.abandonConfirmOverlay = overlay;
+    this.uiLayer.addChild(overlay);
+  }
+
+  private hideAbandonConfirm(): void {
+    if (!this.abandonConfirmOverlay) return;
+    this.uiLayer.removeChild(this.abandonConfirmOverlay);
+    this.abandonConfirmOverlay.destroy({ children: true });
+    this.abandonConfirmOverlay = null;
+  }
+
+  private abandonRun(): void {
+    this.saves.clearCurrentRun();
+    this.onMainMenu?.();
   }
 
   private createOverlayButton(label: string, x: number, y: number, color: number, onClick: () => void): Container {
@@ -1359,8 +2091,11 @@ export class Game {
   }
 
   private addCombatNotice(x: number, y: number, value: string, color: number, maxLife: number) {
-    if (this.combatNotices.length > 44) {
+    if (this.renderCaps.maxFloatingTexts <= 0) return;
+    if (!this.visualBudget.shouldRender('floatingText', value.includes('STABILITY') || value === 'UPGRADE')) return;
+    while (this.combatNotices.length >= this.renderCaps.maxFloatingTexts) {
       const old = this.combatNotices.shift();
+      if (!old) break;
       if (old) {
         this.effectsLayer.removeChild(old.text);
         old.text.destroy();
@@ -1394,19 +2129,260 @@ export class Game {
     }
   }
 
+  private onRendererContextLost(): void {
+    this.contextLostCount++;
+    this.rendererContextLost = true;
+    console.error('[EMOTICORE TD] WebGL context lost', { count: this.contextLostCount });
+  }
+
+  private onRendererContextRestored(): void {
+    console.warn('[EMOTICORE TD] WebGL context restored');
+    this.rendererContextLost = false;
+    this.particles.setSuspended(false);
+  }
+
+  private updateHighLoadRecovery(dt: number): void {
+    this.panicRecoveryCooldown = Math.max(0, this.panicRecoveryCooldown - dt);
+    const fps = this.app.ticker.FPS || 60;
+    const particleCounts = this.particles.counts();
+    const highLoad =
+      (this.waves.current >= 35 && fps < 35) ||
+      particleCounts.particles >= this.renderCaps.maxParticles ||
+      this.projectiles.length >= this.renderCaps.maxProjectiles ||
+      (this.renderCaps.maxFloatingTexts > 0 && this.combatNotices.length >= this.renderCaps.maxFloatingTexts) ||
+      this.groundEffects.length >= this.renderCaps.maxGroundEffects;
+
+    this.highLoadTimer = highLoad ? this.highLoadTimer + dt : Math.max(0, this.highLoadTimer - dt * 2);
+    if (this.highLoadTimer > 3) {
+      this.panicRecovery(`high load fps=${fps.toFixed(0)}`);
+      this.highLoadTimer = 0;
+    }
+  }
+
+  private updateVisualBudget(): void {
+    const particleCounts = this.particles.counts();
+    this.visualBudget.update({
+      wave: this.waves.current,
+      fps: this.app.ticker.FPS || 60,
+      enemyCount: this.enemies.length,
+      projectileCount: this.projectiles.length,
+      particleCount: particleCounts.particles,
+      quality: this.currentQuality
+    });
+  }
+
+  private panicRecovery(reason: string): void {
+    if (this.panicRecoveryCooldown > 0) return;
+    this.panicRecoveryCooldown = 5;
+    const targetQuality: QualitySetting = this.currentQuality === 'high' ? 'medium' : 'low';
+    this.applyQualitySettings(targetQuality);
+    this.particles.clearVisuals();
+    this.particles.setSuspended(false);
+    this.clearFloatingNotices();
+    this.trimVisualEffectsToCaps();
+    this.state.paused = false;
+    this.hidePauseOverlay();
+    this.hud.forceRebuild();
+    this.refreshSidePanel();
+    this.refreshUi();
+    this.showStatusNotice('Performance recovered. Visual quality reduced.', 2.4);
+    console.warn('[Performance] panic recovery', {
+      reason,
+      quality: targetQuality,
+      wave: this.waves.current,
+      enemies: this.enemies.length,
+      projectiles: this.projectiles.length,
+      groundEffects: this.groundEffects.length,
+      overheatZones: this.overheatZones.length,
+      uiChildren: this.uiLayer.children.length,
+      stageChildren: this.app.stage.children.length
+    });
+  }
+
+  private clearFloatingNotices(): void {
+    for (const notice of this.combatNotices) {
+      this.effectsLayer.removeChild(notice.text);
+      notice.text.destroy();
+    }
+    this.combatNotices = [];
+  }
+
+  private trimVisualEffectsToCaps(): void {
+    while (this.groundEffects.length > this.renderCaps.maxGroundEffects) {
+      const effect = this.groundEffects.shift();
+      if (!effect) break;
+      this.effectsLayer.removeChild(effect.gfx);
+      effect.gfx.destroy();
+    }
+    while (this.overheatZones.length > this.renderCaps.maxOverheatZones) {
+      const zone = this.overheatZones.shift();
+      if (!zone) break;
+      this.effectsLayer.removeChild(zone.gfx);
+      zone.gfx.destroy();
+    }
+  }
+
   private calculateScore(): number {
     return this.runStats.score;
   }
 
+  private updateDevStabilityLog(dt: number): void {
+    if (!import.meta.env.DEV) return;
+    this.devStabilityLogTimer += dt;
+    if (this.devStabilityLogTimer < 8) return;
+    this.devStabilityLogTimer = 0;
+    if (this.waves.current < 30) return;
+    const particleCounts = this.particles.counts();
+    console.table({
+      wave: this.waves.current,
+      enemies: this.enemies.length,
+      projectiles: this.projectiles.length,
+      particles: particleCounts.particles,
+      particleRings: particleCounts.rings,
+      groundEffects: this.groundEffects.length,
+      overheatZones: this.overheatZones.length,
+      combatNotices: this.combatNotices.length,
+      synergies: this.synergies.activeCount(),
+      fps: Math.round(this.app.ticker.FPS || 0),
+      quality: this.currentQuality,
+      visualSkipRate: this.visualBudget.getSkipRate(),
+      visualLoadLevel: this.visualBudget.getLoadLevel(),
+      contextLostCount: this.contextLostCount,
+      stageChildren: this.app.stage.children.length,
+      gameChildren: this.root.children.length,
+      uiChildren: this.uiLayer.children.length,
+      selectedTower: this.selectedTower ? `${this.selectedTower.type}@${this.selectedTower.cx},${this.selectedTower.cy}` : null,
+      selectedTowerType: this.selectedTowerType,
+      memory: this.state.memory,
+      stability: this.state.stability,
+      score: this.calculateScore(),
+    });
+  }
+
+  private updateAutoSave(dt: number): void {
+    if (this.state.defeat || this.state.victory) return;
+    this.autoSaveTimer += dt;
+    if (this.autoSaveTimer < 12) return;
+    this.autoSaveTimer = 0;
+    this.saveCurrentRun();
+  }
+
+  private saveCurrentRun(): void {
+    if (this.state.defeat || this.state.victory) return;
+    if (this.towers.length === 0 && this.waves.current === 0 && this.state.memory === this.modifiedStartingMemory()) return;
+    const runConfigForSave: RunConfig = this.mode === 'endless'
+      ? {
+          ...this.runConfig,
+          mode: 'endless',
+          maxWave: undefined,
+          rules: this.runConfig.rules.includes('Waves keep scaling')
+            ? this.runConfig.rules
+            : [...this.runConfig.rules, 'Waves keep scaling']
+        }
+      : this.runConfig;
+    this.saves.saveCurrentRun({
+      runConfig: runConfigForSave,
+      gameState: {
+        memory: this.state.memory,
+        stability: this.state.stability,
+        wave: this.waves.current,
+        score: this.calculateScore(),
+        waveInProgress: !this.state.betweenWaves,
+        restoredFromWaveStart: this.restoredFromWaveStart
+      },
+      towers: this.towers.map((tower) => {
+        const upgrade = tower.getUpgradeState();
+        return {
+          id: `${tower.type}:${tower.cx}:${tower.cy}`,
+          emotion: tower.type,
+          x: tower.x,
+          y: tower.y,
+          gridX: tower.cx,
+          gridY: tower.cy,
+          selectedPath: upgrade.path,
+          pathLevel: upgrade.level,
+          targetingMode: tower.getTargetingMode(),
+          totalSpent: upgrade.spent
+        };
+      }),
+      runStats: this.runStats.toJson()
+    });
+  }
+
+  private restoreCurrentRun(save: CurrentRunSave): void {
+    this.clearActiveEnemiesAndProjectiles();
+    this.towers = [];
+    this.towersLayer.removeChildren();
+    this.balance = new EmotionalBalance();
+    this.balance.setChallengeModifiers(this.runConfig.synergyPowerModifier ?? 1, this.runConfig.singleEmotionPenaltyModifier ?? 1);
+    this.synergies = new SynergySystem();
+    this.synergies.setPowerModifier(this.runConfig.synergyPowerModifier ?? 1);
+    this.runStats = RunStats.fromJson(save.runStats);
+
+    this.state.memory = Math.max(0, Math.floor(save.gameState.memory));
+    this.state.stability = Math.max(1, Math.floor(save.gameState.stability));
+    this.state.paused = false;
+    this.state.defeat = false;
+    this.state.victory = false;
+    this.state.betweenWaves = true;
+    this.state.autoStartIn = AUTO_START_SECONDS;
+    this.restoredFromWaveStart = !!save.gameState.waveInProgress;
+    const restoredWave = save.gameState.waveInProgress
+      ? Math.max(0, Math.floor(save.gameState.wave) - 1)
+      : Math.max(0, Math.floor(save.gameState.wave));
+    this.waves.restoreBetweenWaves(restoredWave);
+    if (save.runConfig.mode === 'endless' || (this.runConfig.maxWave !== undefined && restoredWave >= this.runConfig.maxWave)) {
+      this.mode = 'endless';
+      this.waves.setMaxWave(null);
+    }
+
+    for (const item of save.towers) {
+      if (!TOWER_STATS[item.emotion]) continue;
+      if (!this.map.isPlaceable(item.gridX, item.gridY)) continue;
+      const center = this.map.cellCenter(item.gridX, item.gridY);
+      const tower = new Tower(item.emotion, item.gridX, item.gridY, center.x, center.y);
+      if (item.selectedPath) {
+        for (let level = 0; level < Math.max(0, Math.floor(item.pathLevel)); level++) {
+          if (!tower.upgrade(item.selectedPath)) break;
+        }
+      }
+      tower.setTargetingMode(item.targetingMode);
+      this.wireTowerInput(tower);
+      this.towers.push(tower);
+      this.towersLayer.addChild(tower.container);
+      this.map.occupy(item.gridX, item.gridY);
+      this.balance.add(item.emotion);
+    }
+
+    this.selectedTower = null;
+    this.selectedTowerType = null;
+    this.towerBar.setSelected(null);
+    this.map.redrawCore(this.state.stability / this.modifiedStartingStability());
+    this.refreshSynergies();
+    this.applyBalanceModifiers();
+    this.showStatusNotice(this.restoredFromWaveStart ? 'Run restored from start of current wave' : 'Run restored', 2.2);
+  }
+
+  private modifiedStartingMemory(): number {
+    return Math.max(0, Math.round(ECONOMY.startingMemory * (this.runConfig.startingMemoryModifier ?? 1)));
+  }
+
+  private modifiedStartingStability(): number {
+    return Math.max(1, Math.round(ECONOMY.startingStability * (this.runConfig.startingStabilityModifier ?? 1)));
+  }
+
   private refreshSynergies(): void {
+    this.synergies.setPowerModifier(this.runConfig.synergyPowerModifier ?? 1);
+    this.balance.updateFromTowers(this.towers);
     this.synergies.updateFromTowers(this.towers);
+    this.runStats.recordActiveSynergies(this.synergies.activeCount());
     this.sidePanel.setActiveSynergies(this.synergies.activeSynergies());
   }
 
   private refreshUi() {
     this.hud.update({
       stability: this.state.stability,
-      maxStability: ECONOMY.startingStability,
+      maxStability: this.modifiedStartingStability(),
       memory: this.state.memory,
       score: this.runStats.score,
       wave: this.waves.current,
@@ -1417,6 +2393,12 @@ export class Game {
       autoStartEnabled: this.state.autoStartEnabled,
       balanceDisruption: this.balanceDisruption,
       synergyStatus: this.synergies.statusText(),
+      synergyBadges: this.synergies.activeSynergies().slice(0, 6).map((synergy) => ({
+        label: synergy.label,
+        detail: synergy.bonusLabel ? `${synergy.bonusLabel}. ${synergy.description}` : synergy.description,
+        color: EMOTION_COLOR[synergy.emotions[0]]
+      })),
+      bossWave: !!(this.state.betweenWaves ? this.waves.nextDef()?.isBoss : this.waves.currentDef()?.isBoss),
       notice: this.state.notice
     }, this.balance);
     this.towerBar.setAffordability(this.state.memory);
@@ -1425,7 +2407,8 @@ export class Game {
       paused: this.state.paused,
       speedMultiplier: this.state.speedMultiplier,
       autoStartEnabled: this.state.autoStartEnabled,
-      canRestart: this.state.defeat || this.state.victory || this.waves.current > 0 || this.towers.length > 0
+      canRestart: this.state.defeat || this.state.victory || this.waves.current > 0 || this.towers.length > 0,
+      restartAttention: this.state.defeat
     });
   }
 }

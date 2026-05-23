@@ -2,8 +2,13 @@ import { Container, Graphics } from 'pixi.js';
 import { CANVAS, COLORS, DEFAULT_MAP, FIELD, GRID_SIZE, type MapDefinition } from './config';
 import type { Vec2 } from './types';
 import { PathSampler, dist, clamp } from './math';
+import type { QualitySetting } from '../core/SaveManager';
 
 const PATH_HALF_WIDTH = 22;
+
+function randSign(seed: number): number {
+  return seed % 2 === 0 ? 1 : -1;
+}
 
 interface DecorRipple {
   x: number;
@@ -36,6 +41,65 @@ interface DecorHex {
   phase: number;
 }
 
+interface DecorCrack {
+  points: Vec2[];
+  color: number;
+  alpha: number;
+}
+
+interface DecorNeuralLine {
+  a: Vec2;
+  b: Vec2;
+  phase: number;
+}
+
+interface DecorNode {
+  x: number;
+  y: number;
+  radius: number;
+  phase: number;
+}
+
+interface DecorFogBand {
+  y: number;
+  width: number;
+  speed: number;
+  phase: number;
+  alpha: number;
+}
+
+interface DecorReflection {
+  x: number;
+  y: number;
+  width: number;
+  phase: number;
+}
+
+interface DecorPillar {
+  x: number;
+  y: number;
+  height: number;
+  width: number;
+  phase: number;
+}
+
+interface DecorEmber {
+  x: number;
+  y: number;
+  speed: number;
+  drift: number;
+  size: number;
+  phase: number;
+  color: number;
+}
+
+interface DecorScorch {
+  x: number;
+  y: number;
+  radius: number;
+  phase: number;
+}
+
 export class GameMap {
   readonly container: Container;
   readonly path: PathSampler;
@@ -53,12 +117,21 @@ export class GameMap {
   private coreTime = 0;
   private decorTime = 0;
   private coreStabilityRatio = 1;
+  private quality: QualitySetting = 'medium';
 
   /* style-specific decoration state */
   private ripples: DecorRipple[] = [];
   private lilyPads: DecorLilyPad[] = [];
   private glitchLines: DecorGlitchLine[] = [];
   private hexes: DecorHex[] = [];
+  private cracks: DecorCrack[] = [];
+  private neuralLines: DecorNeuralLine[] = [];
+  private unstableNodes: DecorNode[] = [];
+  private fogBands: DecorFogBand[] = [];
+  private reflections: DecorReflection[] = [];
+  private pillars: DecorPillar[] = [];
+  private embers: DecorEmber[] = [];
+  private scorches: DecorScorch[] = [];
 
   /** Cells that are blocked because a tower is on them (cell key "cx,cy") */
   private occupied = new Set<string>();
@@ -127,6 +200,47 @@ export class GameMap {
         this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 100 + t * 100, FIELD.width, 18)
           .fill({ color: 0x040814, alpha: 0.06 + t * 0.06 });
       }
+    } else if (this.definition.style === 'panic') {
+      // panic: magenta/purple alarm bars top + bottom, deep purple haze
+      for (let i = 0; i < 6; i++) {
+        const t = i / 5;
+        this.bg.rect(FIELD.x, FIELD.y + t * 60, FIELD.width, 60)
+          .fill({ color: 0xff77ff, alpha: 0.018 * (1 - t) });
+        this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 60 + t * 60, FIELD.width, 12)
+          .fill({ color: 0xb070ff, alpha: 0.025 + t * 0.015 });
+      }
+      this.bg.rect(FIELD.x, FIELD.y, FIELD.width, 3)
+        .fill({ color: 0xff77ff, alpha: 0.18 });
+      this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 3, FIELD.width, 3)
+        .fill({ color: 0xff77ff, alpha: 0.18 });
+    } else if (this.definition.style === 'palace') {
+      // palace: warm gold haze + horizontal marble bands
+      for (let i = 0; i < 10; i++) {
+        const t = i / 9;
+        this.bg.rect(FIELD.x, FIELD.y + t * FIELD.height, FIELD.width, FIELD.height / 9)
+          .fill({ color: 0xffd166, alpha: 0.015 + Math.sin(i) * 0.008 });
+      }
+      // top + bottom ornament bars
+      this.bg.rect(FIELD.x, FIELD.y, FIELD.width, 6)
+        .fill({ color: 0xffd166, alpha: 0.22 });
+      this.bg.rect(FIELD.x, FIELD.y + 8, FIELD.width, 1)
+        .fill({ color: 0xfff0c8, alpha: 0.5 });
+      this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 6, FIELD.width, 6)
+        .fill({ color: 0xffd166, alpha: 0.22 });
+      this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 9, FIELD.width, 1)
+        .fill({ color: 0xfff0c8, alpha: 0.5 });
+    } else if (this.definition.style === 'burnout') {
+      // burnout: dark red field with heat haze and scorched edges
+      for (let i = 0; i < 8; i++) {
+        const t = i / 7;
+        this.bg.rect(FIELD.x, FIELD.y + t * FIELD.height, FIELD.width, FIELD.height / 7)
+          .fill({ color: 0xff5b3a, alpha: 0.014 + (1 - t) * 0.012 });
+      }
+      // smouldering edges
+      this.bg.rect(FIELD.x, FIELD.y, FIELD.width, 5)
+        .fill({ color: 0xff5b3a, alpha: 0.32 });
+      this.bg.rect(FIELD.x, FIELD.y + FIELD.height - 5, FIELD.width, 5)
+        .fill({ color: 0xffd166, alpha: 0.18 });
     } else {
       // fractured: subtle radial darkening near the edges
       this.bg.rect(FIELD.x, FIELD.y, FIELD.width, 4)
@@ -142,7 +256,8 @@ export class GameMap {
   private drawGrid() {
     const g = this.gridG;
     g.clear();
-    const dotted = this.definition.style === 'silent';
+    const style = this.definition.style;
+    const dotted = style === 'silent' || style === 'burnout';
     const gridColor = this.definition.backgroundColors.grid;
     const gridStrongColor = this.definition.backgroundColors.gridStrong;
 
@@ -157,6 +272,34 @@ export class GameMap {
             .fill({ color: accent ? gridStrongColor : gridColor, alpha: accent ? 0.85 : 0.45 });
         }
       }
+    } else if (style === 'panic') {
+      for (let cx = 0; cx <= this.cols; cx++) {
+        const x = FIELD.x + cx * GRID_SIZE;
+        for (let y = FIELD.y; y < FIELD.y + this.rows * GRID_SIZE; y += GRID_SIZE * 2) {
+          if ((cx + y / GRID_SIZE) % 5 === 0) continue;
+          const jitter = ((cx * 13 + y) % 7) - 3;
+          g.moveTo(x + jitter, y).lineTo(x + jitter, Math.min(y + GRID_SIZE * 1.25, FIELD.y + this.rows * GRID_SIZE));
+        }
+      }
+      for (let cy = 0; cy <= this.rows; cy++) {
+        const y = FIELD.y + cy * GRID_SIZE;
+        for (let x = FIELD.x; x < FIELD.x + this.cols * GRID_SIZE; x += GRID_SIZE * 2) {
+          if ((cy + x / GRID_SIZE) % 4 === 0) continue;
+          const jitter = ((cy * 17 + x) % 7) - 3;
+          g.moveTo(x, y + jitter).lineTo(Math.min(x + GRID_SIZE * 1.3, FIELD.x + this.cols * GRID_SIZE), y + jitter);
+        }
+      }
+      g.stroke({ color: gridColor, width: 1, alpha: 0.38 });
+    } else if (style === 'fractured') {
+      for (let cx = 0; cx <= this.cols; cx += 2) {
+        const x = FIELD.x + cx * GRID_SIZE;
+        g.moveTo(x, FIELD.y).lineTo(x + ((cx % 4) - 1) * 5, FIELD.y + this.rows * GRID_SIZE);
+      }
+      for (let cy = 0; cy <= this.rows; cy += 2) {
+        const y = FIELD.y + cy * GRID_SIZE;
+        g.moveTo(FIELD.x, y).lineTo(FIELD.x + this.cols * GRID_SIZE, y + ((cy % 4) - 1) * 4);
+      }
+      g.stroke({ color: gridColor, width: 1, alpha: 0.32 });
     } else {
       for (let cx = 0; cx <= this.cols; cx++) {
         const x = FIELD.x + cx * GRID_SIZE;
@@ -166,7 +309,7 @@ export class GameMap {
         const y = FIELD.y + cy * GRID_SIZE;
         g.moveTo(FIELD.x, y).lineTo(FIELD.x + this.cols * GRID_SIZE, y);
       }
-      g.stroke({ color: gridColor, width: 1, alpha: 0.65 });
+      g.stroke({ color: gridColor, width: 1, alpha: 0.42 });
 
       // accent every 4th line
       for (let cx = 0; cx <= this.cols; cx += 4) {
@@ -177,7 +320,7 @@ export class GameMap {
         const y = FIELD.y + cy * GRID_SIZE;
         g.moveTo(FIELD.x, y).lineTo(FIELD.x + this.cols * GRID_SIZE, y);
       }
-      g.stroke({ color: gridStrongColor, width: 1, alpha: 0.5 });
+      g.stroke({ color: gridStrongColor, width: 1, alpha: 0.32 });
     }
   }
 
@@ -194,6 +337,62 @@ export class GameMap {
   }
 
   private initDecorations() {
+    if (this.definition.style === 'palace') {
+      // pillars at vertical positions, biased to side gutters
+      const lanes = [FIELD.x + 50, FIELD.x + 130, FIELD.x + FIELD.width - 130, FIELD.x + FIELD.width - 50];
+      for (let i = 0; i < 16; i++) {
+        const x = lanes[i % lanes.length] + ((i % 2 === 0) ? 0 : 12);
+        const y = FIELD.y + 40 + Math.floor(i / lanes.length) * 140;
+        if (this.distanceToPath({ x, y }) < 50) continue;
+        this.pillars.push({ x, y, height: 96 + (i % 3) * 14, width: 14, phase: i * 0.41 });
+      }
+      // gentle gold sparkles re-using ember slot
+      for (let i = 0; i < 20; i++) {
+        const point = this.findOpenSpot(36);
+        if (!point) continue;
+        this.embers.push({
+          x: point.x,
+          y: point.y,
+          speed: 0,
+          drift: 0,
+          size: 1.2 + (i % 3) * 0.5,
+          phase: i * 0.27,
+          color: i % 2 === 0 ? 0xffd166 : 0xfff0c8
+        });
+      }
+      return;
+    }
+    if (this.definition.style === 'burnout') {
+      // scorch marks scattered around the field
+      for (let i = 0; i < 12; i++) {
+        const point = this.findOpenSpot(38);
+        if (!point) continue;
+        this.scorches.push({ x: point.x, y: point.y, radius: 10 + (i % 4) * 4, phase: i * 0.7 });
+      }
+      // drifting embers
+      for (let i = 0; i < 28; i++) {
+        this.embers.push({
+          x: FIELD.x + 20 + Math.random() * (FIELD.width - 40),
+          y: FIELD.y + Math.random() * FIELD.height,
+          speed: 18 + (i % 6) * 4,
+          drift: 6 + (i % 4) * 2,
+          size: 1.2 + (i % 3) * 0.7,
+          phase: i * 0.31,
+          color: i % 3 === 0 ? 0xffd166 : i % 3 === 1 ? 0xff5b3a : 0xff8b58
+        });
+      }
+      // heat haze bands re-using fogBand slot
+      for (let i = 0; i < 4; i++) {
+        this.fogBands.push({
+          y: FIELD.y + 70 + i * 130,
+          width: 200 + i * 40,
+          speed: 24 + i * 6,
+          phase: i * 73,
+          alpha: 0.05 + i * 0.008
+        });
+      }
+      return;
+    }
     if (this.definition.style === 'silent') {
       // ripples scattered around the field, biased away from the path
       for (let i = 0; i < 14; i++) {
@@ -219,6 +418,25 @@ export class GameMap {
           phase: i * 1.3
         });
       }
+      for (let i = 0; i < 8; i++) {
+        const point = this.findOpenSpot(42);
+        if (!point) continue;
+        this.reflections.push({
+          x: point.x,
+          y: point.y,
+          width: 32 + (i % 4) * 18,
+          phase: i * 0.9
+        });
+      }
+      for (let i = 0; i < 5; i++) {
+        this.fogBands.push({
+          y: FIELD.y + 70 + i * 88,
+          width: 220 + i * 34,
+          speed: 18 + i * 5,
+          phase: i * 91,
+          alpha: 0.045 + i * 0.006
+        });
+      }
     } else {
       // glitch streak lines + decorative hex accents
       for (let i = 0; i < 5; i++) {
@@ -240,6 +458,40 @@ export class GameMap {
           phase: i * 0.55
         });
       }
+      for (let i = 0; i < 13; i++) {
+        const start = this.findOpenSpot(34);
+        if (!start) continue;
+        const points: Vec2[] = [start];
+        const segments = 2 + (i % 3);
+        let x = start.x;
+        let y = start.y;
+        for (let s = 0; s < segments; s++) {
+          x += randSign(i + s) * (28 + ((i + s) % 3) * 16);
+          y += randSign(i * 3 + s) * (16 + ((i + s) % 4) * 10);
+          points.push({ x: clamp(x, FIELD.x + 20, FIELD.x + FIELD.width - 20), y: clamp(y, FIELD.y + 20, FIELD.y + FIELD.height - 20) });
+        }
+        this.cracks.push({
+          points,
+          color: i % 2 === 0 ? 0xff5577 : 0x6cf0ff,
+          alpha: 0.18 + (i % 3) * 0.04
+        });
+      }
+      for (let i = 0; i < 14; i++) {
+        const a = this.findOpenSpot(44);
+        const b = this.findOpenSpot(44);
+        if (!a || !b) continue;
+        this.neuralLines.push({ a, b, phase: i * 0.47 });
+      }
+      for (let i = 0; i < 11; i++) {
+        const point = this.findOpenSpot(36);
+        if (!point) continue;
+        this.unstableNodes.push({
+          x: point.x,
+          y: point.y,
+          radius: 3 + (i % 3) * 1.8,
+          phase: i * 0.73
+        });
+      }
     }
   }
 
@@ -258,7 +510,50 @@ export class GameMap {
     const g = this.decorStaticG;
     g.clear();
 
+    if (this.definition.style === 'palace') {
+      for (const p of this.pillars) {
+        const halfW = p.width / 2;
+        // capital
+        g.rect(p.x - halfW - 4, p.y - p.height / 2 - 6, p.width + 8, 6)
+          .fill({ color: 0xffd166, alpha: 0.35 });
+        // shaft
+        g.rect(p.x - halfW, p.y - p.height / 2, p.width, p.height)
+          .fill({ color: 0xfff0c8, alpha: 0.06 })
+          .stroke({ color: 0xffd166, width: 1, alpha: 0.5 });
+        // base
+        g.rect(p.x - halfW - 4, p.y + p.height / 2, p.width + 8, 6)
+          .fill({ color: 0xffd166, alpha: 0.35 });
+        // inner highlight
+        g.rect(p.x - 1, p.y - p.height / 2 + 4, 2, p.height - 8)
+          .fill({ color: 0xfff0c8, alpha: 0.18 });
+      }
+      return;
+    }
+    if (this.definition.style === 'burnout') {
+      for (const s of this.scorches) {
+        // scorched ground — concentric burns
+        g.circle(s.x, s.y, s.radius + 6).fill({ color: 0x000000, alpha: 0.35 });
+        g.circle(s.x, s.y, s.radius).fill({ color: 0x3a0a04, alpha: 0.65 });
+        g.circle(s.x, s.y, s.radius * 0.6).fill({ color: 0x6a1a08, alpha: 0.6 });
+        // crackle highlight
+        for (let i = 0; i < 4; i++) {
+          const a = (i / 4) * Math.PI * 2 + s.phase;
+          g.moveTo(s.x + Math.cos(a) * (s.radius * 0.3), s.y + Math.sin(a) * (s.radius * 0.3))
+            .lineTo(s.x + Math.cos(a) * (s.radius * 1.05), s.y + Math.sin(a) * (s.radius * 1.05))
+            .stroke({ color: 0xff5b3a, width: 1, alpha: 0.32 });
+        }
+      }
+      return;
+    }
     if (this.definition.style === 'silent') {
+      for (const reflection of this.reflections) {
+        g.moveTo(reflection.x - reflection.width / 2, reflection.y)
+          .lineTo(reflection.x + reflection.width / 2, reflection.y)
+          .stroke({ color: 0x9bdcff, width: 1.2, alpha: 0.13 });
+        g.moveTo(reflection.x - reflection.width * 0.35, reflection.y + 8)
+          .lineTo(reflection.x + reflection.width * 0.35, reflection.y + 8)
+          .stroke({ color: 0x6cf0d9, width: 1, alpha: 0.1 });
+      }
       for (const pad of this.lilyPads) {
         // lily pad — soft layered disc
         g.circle(pad.x, pad.y, pad.radius + 6).fill({ color: pad.hue, alpha: 0.04 });
@@ -267,10 +562,28 @@ export class GameMap {
         g.circle(pad.x, pad.y, pad.radius * 0.45).fill({ color: 0x9bdcff, alpha: 0.5 });
       }
     } else {
+      for (const crack of this.cracks) {
+        if (crack.points.length < 2) continue;
+        g.moveTo(crack.points[0].x, crack.points[0].y);
+        for (let i = 1; i < crack.points.length; i++) {
+          g.lineTo(crack.points[i].x, crack.points[i].y);
+        }
+        g.stroke({ color: crack.color, width: 1.4, alpha: crack.alpha });
+        const tip = crack.points[crack.points.length - 1];
+        g.circle(tip.x, tip.y, 2).fill({ color: crack.color, alpha: crack.alpha + 0.08 });
+      }
+      for (const line of this.neuralLines) {
+        g.moveTo(line.a.x, line.a.y).lineTo(line.b.x, line.b.y)
+          .stroke({ color: 0x6cf0ff, width: 1, alpha: 0.08 });
+      }
       for (const hex of this.hexes) {
         g.regularPoly(hex.x, hex.y, hex.radius + 6, 6, 0).stroke({ color: 0x6cf0ff, width: 1, alpha: 0.16 });
         g.regularPoly(hex.x, hex.y, hex.radius, 6, 0).stroke({ color: 0xff5577, width: 1, alpha: 0.22 });
         g.circle(hex.x, hex.y, 1.8).fill({ color: 0x6cf0ff, alpha: 0.7 });
+      }
+      for (const node of this.unstableNodes) {
+        g.circle(node.x, node.y, node.radius + 5).stroke({ color: 0xff5577, width: 1, alpha: 0.12 });
+        g.circle(node.x, node.y, node.radius).fill({ color: 0x6cf0ff, alpha: 0.35 });
       }
     }
   }
@@ -280,7 +593,58 @@ export class GameMap {
     g.clear();
     const t = this.decorTime;
 
+    if (this.definition.style === 'palace') {
+      // pillar shimmer
+      for (const p of this.pillars) {
+        const shimmer = 0.5 + Math.sin(t * 0.9 + p.phase) * 0.5;
+        const halfW = p.width / 2;
+        g.rect(p.x - halfW + 1, p.y - p.height / 2 + 6, p.width - 2, p.height - 12)
+          .fill({ color: 0xfff0c8, alpha: 0.04 + shimmer * 0.07 });
+      }
+      // gold sparkle dust
+      for (const dust of this.embers) {
+        const pulse = 0.5 + Math.sin(t * 2.6 + dust.phase) * 0.5;
+        if (pulse < 0.55) continue;
+        g.circle(dust.x, dust.y, dust.size + pulse * 0.6)
+          .fill({ color: dust.color, alpha: 0.18 + pulse * 0.32 });
+      }
+      return;
+    }
+    if (this.definition.style === 'burnout') {
+      // heat haze
+      for (const band of this.fogBands) {
+        const x = FIELD.x + ((t * band.speed + band.phase) % (FIELD.width + band.width)) - band.width;
+        g.ellipse(x + band.width / 2, band.y, band.width / 2, 16)
+          .fill({ color: 0xff5b3a, alpha: band.alpha });
+        g.ellipse(x + band.width * 0.7, band.y + 10, band.width / 3, 10)
+          .fill({ color: 0xffd166, alpha: band.alpha * 0.6 });
+      }
+      // drifting embers — rise upward, wrap when off the top
+      for (const em of this.embers) {
+        const totalDrift = FIELD.height + 40;
+        const cyc = ((t * em.speed + em.phase * 60) % totalDrift);
+        const yPos = FIELD.y + FIELD.height - cyc;
+        const xPos = em.x + Math.sin(t * 1.4 + em.phase * 4) * em.drift;
+        const lifeAlpha = (1 - cyc / totalDrift) * 0.85;
+        g.circle(xPos, yPos, em.size + lifeAlpha * 0.6)
+          .fill({ color: em.color, alpha: 0.4 + lifeAlpha * 0.4 });
+        g.circle(xPos, yPos, em.size * 2)
+          .fill({ color: em.color, alpha: 0.04 + lifeAlpha * 0.06 });
+      }
+      // scorch pulses
+      for (const s of this.scorches) {
+        const pulse = 0.5 + Math.sin(t * 3 + s.phase) * 0.5;
+        g.circle(s.x, s.y, s.radius * 0.32 + pulse * 1.5)
+          .fill({ color: 0xff5b3a, alpha: 0.18 + pulse * 0.22 });
+      }
+      return;
+    }
     if (this.definition.style === 'silent') {
+      for (const band of this.fogBands) {
+        const x = FIELD.x + ((t * band.speed + band.phase) % (FIELD.width + band.width)) - band.width;
+        g.ellipse(x + band.width / 2, band.y, band.width / 2, 20).fill({ color: 0x9bdcff, alpha: band.alpha });
+        g.ellipse(x + band.width * 0.74, band.y + 12, band.width / 3, 14).fill({ color: 0x6cf0d9, alpha: band.alpha * 0.55 });
+      }
       // expanding water rings
       for (const r of this.ripples) {
         const cycle = (t * r.speed + r.phase) % 1;
@@ -296,6 +660,12 @@ export class GameMap {
         g.circle(pad.x + Math.cos(pad.phase) * 1.2, pad.y - 3 - bob * 4, pad.radius * 0.18)
           .fill({ color: 0xffffff, alpha: 0.3 + bob * 0.4 });
       }
+      for (const reflection of this.reflections) {
+        const shimmer = 0.5 + Math.sin(t * 1.4 + reflection.phase) * 0.5;
+        g.moveTo(reflection.x - reflection.width * 0.28, reflection.y - 5)
+          .lineTo(reflection.x + reflection.width * 0.28, reflection.y - 5)
+          .stroke({ color: 0xffffff, width: 1, alpha: 0.08 + shimmer * 0.08 });
+      }
     } else {
       // horizontal glitch streaks
       for (const line of this.glitchLines) {
@@ -308,6 +678,17 @@ export class GameMap {
       for (const hex of this.hexes) {
         const pulse = 0.5 + Math.sin(t * 2 + hex.phase) * 0.5;
         g.circle(hex.x, hex.y, 0.8 + pulse * 1.6).fill({ color: 0xff5577, alpha: 0.5 + pulse * 0.3 });
+      }
+      for (const node of this.unstableNodes) {
+        const pulse = 0.5 + Math.sin(t * 3.5 + node.phase) * 0.5;
+        g.circle(node.x, node.y, node.radius + pulse * 8).stroke({ color: 0xff5577, width: 1, alpha: 0.08 + pulse * 0.22 });
+        g.circle(node.x, node.y, node.radius * 0.65 + pulse * 1.5).fill({ color: 0x6cf0ff, alpha: 0.18 + pulse * 0.28 });
+      }
+      for (const line of this.neuralLines) {
+        const pulse = 0.5 + Math.sin(t * 2.1 + line.phase) * 0.5;
+        if (pulse < 0.72) continue;
+        g.moveTo(line.a.x, line.a.y).lineTo(line.b.x, line.b.y)
+          .stroke({ color: 0x6cf0ff, width: 1, alpha: (pulse - 0.72) * 0.45 });
       }
     }
   }
@@ -327,8 +708,28 @@ export class GameMap {
       g.stroke({ color: colors.pathCore, width: 2, alpha: 0.7, cap: 'round', join: 'round' });
       this.tracePath(g);
       g.stroke({ color: 0xffffff, width: 0.6, alpha: 0.18, cap: 'round', join: 'round' });
+    } else if (this.definition.style === 'palace') {
+      // palace: ornate gold rails with double trim
+      this.tracePath(g);
+      g.stroke({ color: colors.pathEdge, width: PATH_HALF_WIDTH * 2 + 12, alpha: 0.55, cap: 'round', join: 'miter' });
+      this.tracePath(g);
+      g.stroke({ color: 0x2a1808, width: PATH_HALF_WIDTH * 2, alpha: 0.95, cap: 'round', join: 'miter' });
+      this.tracePath(g);
+      g.stroke({ color: colors.pathCore, width: 3, alpha: 0.82, cap: 'round', join: 'miter' });
+      this.tracePath(g);
+      g.stroke({ color: 0xfff0c8, width: 1, alpha: 0.45, cap: 'round', join: 'miter' });
+    } else if (this.definition.style === 'burnout') {
+      // burnout: cracked ember channel
+      this.tracePath(g);
+      g.stroke({ color: 0x3a0a04, width: PATH_HALF_WIDTH * 2 + 12, alpha: 0.85, cap: 'round', join: 'round' });
+      this.tracePath(g);
+      g.stroke({ color: colors.pathEdge, width: PATH_HALF_WIDTH * 2 + 4, alpha: 0.7, cap: 'round', join: 'round' });
+      this.tracePath(g);
+      g.stroke({ color: 0x180603, width: PATH_HALF_WIDTH * 2, alpha: 0.9, cap: 'round', join: 'round' });
+      this.tracePath(g);
+      g.stroke({ color: colors.pathCore, width: 2.5, alpha: 0.95, cap: 'round', join: 'round' });
     } else {
-      // fractured: sharp neon circuit
+      // fractured + panic fall back to the sharp neon circuit treatment
       this.tracePath(g);
       g.stroke({ color: colors.pathEdge, width: PATH_HALF_WIDTH * 2 + 8, alpha: 0.45, cap: 'round', join: 'round' });
       this.tracePath(g);
@@ -353,6 +754,11 @@ export class GameMap {
   redrawCore(stabilityRatio: number) {
     this.coreStabilityRatio = clamp(stabilityRatio, 0, 1);
     this.drawCoreVisual();
+  }
+
+  setQuality(quality: QualitySetting): void {
+    this.quality = quality;
+    this.decorAnimG.visible = quality !== 'low';
   }
 
   private drawCoreVisual() {
@@ -396,7 +802,7 @@ export class GameMap {
     this.flowOffset = (this.flowOffset + dt * 220) % this.path.totalLength;
     this.coreTime += dt;
     this.decorTime += dt;
-    this.drawAnimatedDecorations();
+    if (this.quality !== 'low') this.drawAnimatedDecorations();
     this.drawFlow();
     this.drawCoreVisual();
   }

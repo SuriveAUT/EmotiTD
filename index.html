@@ -24,6 +24,7 @@
         height: 100%;
         user-select: none;
         -webkit-user-select: none;
+        overscroll-behavior: contain;
       }
       /* atmospheric background — the "frame" outside the canvas */
       body::before {
@@ -85,10 +86,63 @@
         color: #6cf0ff;
       }
       #boot.gone { opacity: 0; }
+      #rotate-hint {
+        position: fixed;
+        inset: 0;
+        z-index: 12;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background:
+          radial-gradient(ellipse at center, rgba(108, 240, 255, 0.14), transparent 58%),
+          rgba(2, 3, 10, 0.94);
+        backdrop-filter: blur(8px);
+      }
+      #rotate-hint.visible { display: flex; }
+      #rotate-hint .panel {
+        width: min(360px, 100%);
+        border: 1px solid rgba(108, 240, 255, 0.65);
+        border-radius: 14px;
+        background: rgba(5, 9, 18, 0.96);
+        padding: 22px;
+        box-shadow: 0 0 40px rgba(108, 240, 255, 0.14);
+        text-align: center;
+      }
+      #rotate-hint .title {
+        color: var(--neon-cyan);
+        font-size: 18px;
+        font-weight: 900;
+        letter-spacing: 3px;
+        margin-bottom: 10px;
+      }
+      #rotate-hint .body {
+        color: #b8c4d8;
+        font-size: 14px;
+        line-height: 1.45;
+        margin-bottom: 18px;
+      }
+      #rotate-hint button {
+        min-height: 44px;
+        min-width: 180px;
+        border: 1px solid var(--neon-pink);
+        border-radius: 10px;
+        background: rgba(255, 85, 119, 0.14);
+        color: #fff;
+        font-weight: 900;
+        letter-spacing: 2px;
+      }
     </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="rotate-hint">
+      <div class="panel">
+        <div class="title">LANDSCAPE RECOMMENDED</div>
+        <div class="body">EMOTICORE TD has a dense tactical UI. Rotate your device for clearer controls and better tower placement.</div>
+        <button type="button">CONTINUE ANYWAY</button>
+      </div>
+    </div>
     <div id="boot">
       <div class="title">EMOTICORE TD</div>
       <div class="sub">DEFEND&nbsp;&nbsp;THE&nbsp;&nbsp;CORE</div>

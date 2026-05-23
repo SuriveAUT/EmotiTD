@@ -1,7 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { ENEMY_STATS } from './config';
 import type { DamagePacket } from './types';
-import { EmotionType, EnemyKind } from './types';
+import { EmotionType, EnemyKind, isBossKind } from './types';
 import type { ParticleSystem } from './Particles';
 import type { PathSampler } from './math';
 import { TAU, rand } from './math';
@@ -24,10 +24,10 @@ export class Enemy {
   /** flagged once death rewards have been paid out */
   rewarded = false;
 
-  /** scale on base speed (1 = normal, < 1 = slower) */
   private slowMul = 1;
   private slowTimer = 0;
   private stunTimer = 0;
+  private stunImmunityTimer = 0;
   private hasteMul = 1;
   private hasteTimer = 0;
   /** 0..1, glitch wobble amount when feared */
@@ -91,6 +91,8 @@ export class Enemy {
     switch (this.kind) {
       case EnemyKind.Doubtling: this.drawDoubtling(g); break;
       case EnemyKind.PanicRunner: this.drawPanic(g); break;
+      case EnemyKind.Fractureling: this.drawFractureling(g); break;
+      case EnemyKind.PressureKnot: this.drawPressureKnot(g); break;
       case EnemyKind.GuiltGiant: this.drawGuilt(g); break;
       case EnemyKind.ShameSwarm: this.drawShame(g); break;
       case EnemyKind.EnvyLeech: this.drawEnvy(g); break;
@@ -99,6 +101,8 @@ export class Enemy {
       case EnemyKind.Overthinker: this.drawOverthinker(g); break;
       case EnemyKind.NumbOne: this.drawNumb(g); break;
       case EnemyKind.Spiral: this.drawSpiral(g); break;
+      case EnemyKind.Mask: this.drawMask(g); break;
+      case EnemyKind.BurnoutBoss: this.drawBurnoutBoss(g); break;
     }
   }
 
@@ -114,15 +118,49 @@ export class Enemy {
   private drawPanic(g: Graphics) {
     const r = this.radius;
     // arrow-like triangle
+    g.poly([r * 1.45, 0, -r * 1.0, -r * 1.05, -r * 0.65, 0, -r * 1.0, r * 1.05])
+      .fill({ color: 0xff5577, alpha: 0.12 });
     g.poly([r * 1.1, 0, -r * 0.8, -r * 0.8, -r * 0.8, r * 0.8])
       .fill({ color: 0x441020, alpha: 1 })
       .stroke({ color: 0xff5577, width: 2, alpha: 1 });
     g.circle(-r * 0.2, 0, r * 0.3).fill({ color: 0xff5577, alpha: 0.9 });
+    g.moveTo(-r * 1.15, -r * 0.62).lineTo(-r * 1.65, -r * 0.62).stroke({ color: 0xffd166, width: 1.5, alpha: 0.8 });
+    g.moveTo(-r * 1.08, r * 0.55).lineTo(-r * 1.48, r * 0.55).stroke({ color: 0xffd166, width: 1.2, alpha: 0.65 });
+  }
+
+  private drawFractureling(g: Graphics) {
+    const r = this.radius;
+    g.circle(0, 0, r + 5).fill({ color: 0x07111d, alpha: 0.62 });
+    g.poly([
+      -r * 0.95, -r * 0.25,
+      -r * 0.25, -r * 1.05,
+      r * 0.85, -r * 0.55,
+      r * 0.62, r * 0.65,
+      -r * 0.18, r * 1.05,
+      -r * 1.05, r * 0.35
+    ]).fill({ color: 0x0b1c2a, alpha: 1 }).stroke({ color: 0x6cf0ff, width: 1.8, alpha: 0.88 });
+    g.moveTo(-r * 0.55, r * 0.38).lineTo(r * 0.72, -r * 0.48).stroke({ color: 0xff77ff, width: 1.4, alpha: 0.82 });
+    g.moveTo(-r * 0.25, -r * 0.78).lineTo(r * 0.18, r * 0.82).stroke({ color: 0x6cf0ff, width: 1.1, alpha: 0.62 });
+    g.circle(0, 0, r * 0.28).fill({ color: 0xff77ff, alpha: 0.78 });
+  }
+
+  private drawPressureKnot(g: Graphics) {
+    const r = this.radius;
+    g.circle(0, 0, r + 7).fill({ color: 0x140b08, alpha: 0.72 });
+    g.circle(0, 0, r + 3).stroke({ color: 0xffd166, width: 2, alpha: 0.45 });
+    g.circle(0, 0, r).fill({ color: 0x17111a, alpha: 1 }).stroke({ color: 0xff8a4d, width: 2, alpha: 0.82 });
+    for (let i = 0; i < 3; i++) {
+      const a = i * TAU / 3 + Math.PI / 7;
+      g.ellipse(Math.cos(a) * r * 0.22, Math.sin(a) * r * 0.22, r * 0.82, r * 0.24)
+        .stroke({ color: i === 1 ? 0xffd166 : 0xff8a4d, width: 1.5, alpha: 0.68 });
+    }
+    g.circle(0, 0, r * 0.32).fill({ color: 0xffd166, alpha: 0.72 });
   }
 
   private drawGuilt(g: Graphics) {
     const r = this.radius;
-    g.regularPoly(0, 0, r + 4, 8, 0).fill({ color: 0x0a0f1a, alpha: 0.6 });
+    g.regularPoly(0, 0, r + 7, 8, 0).fill({ color: 0x0a0f1a, alpha: 0.7 });
+    g.regularPoly(0, 0, r + 3, 8, Math.PI / 8).stroke({ color: 0xffd166, width: 2, alpha: 0.34 });
     g.regularPoly(0, 0, r, 8, 0).fill({ color: 0x1d2438, alpha: 1 });
     g.regularPoly(0, 0, r, 8, 0).stroke({ color: 0x6c7da0, width: 2, alpha: 0.9 });
     // chain marks
@@ -156,17 +194,47 @@ export class Enemy {
 
   private drawSpiral(g: Graphics) {
     const r = this.radius;
-    g.circle(0, 0, r + 16).fill({ color: 0xff5577, alpha: 0.05 });
-    g.circle(0, 0, r + 8).fill({ color: 0xff5577, alpha: 0.1 });
+    g.circle(0, 0, r + 28).fill({ color: 0xff5577, alpha: 0.06 });
+    g.circle(0, 0, r + 18).stroke({ color: 0xff5577, width: 2, alpha: 0.38 });
+    g.circle(0, 0, r + 9).fill({ color: 0xff5577, alpha: 0.12 });
     g.circle(0, 0, r).fill({ color: 0x110714, alpha: 1 });
     // rotating arms (will be spun via container)
-    for (let i = 0; i < 5; i++) {
-      const a = (i / 5) * TAU;
-      g.moveTo(0, 0).lineTo(Math.cos(a) * r, Math.sin(a) * r)
-        .stroke({ color: 0xff5577, width: 3, alpha: 0.85 });
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * TAU;
+      const inner = r * 0.18;
+      const outer = r + 13;
+      g.moveTo(Math.cos(a) * inner, Math.sin(a) * inner).lineTo(Math.cos(a + 0.42) * outer, Math.sin(a + 0.42) * outer)
+        .stroke({ color: 0xff5577, width: 4, alpha: 0.9 });
+      g.circle(Math.cos(a + 0.42) * outer, Math.sin(a + 0.42) * outer, 4).fill({ color: 0xffd166, alpha: 0.85 });
     }
-    g.circle(0, 0, r * 0.45).stroke({ color: 0x6cf0ff, width: 2, alpha: 0.9 });
-    g.circle(0, 0, r * 0.22).fill({ color: 0xffffff, alpha: 0.95 });
+    g.circle(0, 0, r * 0.58).stroke({ color: 0x6cf0ff, width: 2.5, alpha: 0.95 });
+    g.circle(0, 0, r * 0.32).fill({ color: 0xffffff, alpha: 0.95 });
+    g.circle(0, 0, r + 2).stroke({ color: 0xffffff, width: 1, alpha: 0.25 });
+  }
+
+  private drawMask(g: Graphics) {
+    const r = this.radius;
+    g.circle(0, 0, r + 24).fill({ color: 0xff77ff, alpha: 0.05 });
+    g.circle(0, 0, r + 14).stroke({ color: 0xff77ff, width: 2, alpha: 0.35 });
+    g.ellipse(0, 0, r * 0.9, r * 1.15).fill({ color: 0x17091f, alpha: 1 }).stroke({ color: 0xff77ff, width: 3, alpha: 0.9 });
+    g.circle(-r * 0.28, -r * 0.18, r * 0.14).fill({ color: 0x6cf0ff, alpha: 0.95 });
+    g.circle(r * 0.28, -r * 0.18, r * 0.14).fill({ color: 0xffd166, alpha: 0.95 });
+    g.moveTo(-r * 0.45, r * 0.35).lineTo(r * 0.45, r * 0.25).stroke({ color: 0xffffff, width: 2, alpha: 0.65 });
+    g.moveTo(0, -r * 0.95).lineTo(0, r * 0.95).stroke({ color: 0xb070ff, width: 1.5, alpha: 0.55 });
+  }
+
+  private drawBurnoutBoss(g: Graphics) {
+    const r = this.radius;
+    g.circle(0, 0, r + 26).fill({ color: 0xff5b3a, alpha: 0.07 });
+    g.regularPoly(0, 0, r + 14, 8, Math.PI / 8).stroke({ color: 0xff5b3a, width: 3, alpha: 0.45 });
+    g.regularPoly(0, 0, r + 2, 8, 0).fill({ color: 0x190906, alpha: 1 }).stroke({ color: 0xff5b3a, width: 3, alpha: 0.9 });
+    g.circle(0, 0, r * 0.58).stroke({ color: 0xffd166, width: 2.4, alpha: 0.8 });
+    for (let i = 0; i < 5; i++) {
+      const a = -1.2 + i * 0.6;
+      g.moveTo(Math.cos(a) * r * 0.22, Math.sin(a) * r * 0.22)
+        .lineTo(Math.cos(a) * r * 0.92, Math.sin(a) * r * 0.92)
+        .stroke({ color: 0xffd166, width: 2, alpha: 0.72 });
+    }
   }
 
   private drawEnvy(g: Graphics) {
@@ -175,12 +243,15 @@ export class Enemy {
     g.circle(0, 0, r).fill({ color: 0x07130b, alpha: 1 }).stroke({ color: 0x77ffaa, width: 2, alpha: 0.9 });
     g.circle(r * 0.3, -r * 0.15, r * 0.38).fill({ color: 0x77ffaa, alpha: 0.85 });
     g.moveTo(-r * 0.7, r * 0.55).lineTo(r * 0.8, -r * 0.55).stroke({ color: 0x2aff77, width: 1.5, alpha: 0.75 });
+    g.circle(-r * 0.68, -r * 0.55, 2.6).fill({ color: 0x77ffaa, alpha: 0.8 });
+    g.circle(r * 0.72, r * 0.5, 2.3).fill({ color: 0x77ffaa, alpha: 0.65 });
   }
 
   private drawBurnout(g: Graphics) {
     const r = this.radius;
-    g.regularPoly(0, 0, r + 4, 7, 0).fill({ color: 0x12080a, alpha: 1 });
-    g.regularPoly(0, 0, r, 7, 0).stroke({ color: 0xff5b3a, width: 2, alpha: 0.75 });
+    g.regularPoly(0, 0, r + 8, 7, 0).fill({ color: 0x12080a, alpha: 1 });
+    g.regularPoly(0, 0, r + 3, 7, 0).stroke({ color: 0xff5b3a, width: 3, alpha: 0.75 });
+    g.regularPoly(0, 0, r, 7, Math.PI / 7).fill({ color: 0x24100a, alpha: 0.75 });
     for (let i = 0; i < 4; i++) {
       const a = -0.9 + i * 0.55;
       g.moveTo(Math.cos(a) * r * 0.2, Math.sin(a) * r * 0.2)
@@ -193,6 +264,7 @@ export class Enemy {
   private drawVoid(g: Graphics) {
     const r = this.radius;
     g.circle(0, 0, r + 7).fill({ color: 0x000000, alpha: 0.42 });
+    g.circle(0, 0, r + 11).stroke({ color: 0xb070ff, width: 1, alpha: 0.28 });
     g.poly([0, -r, r * 0.75, -r * 0.15, r * 0.35, r, -r * 0.75, r * 0.35, -r * 0.45, -r * 0.65])
       .fill({ color: 0x05030b, alpha: 1 })
       .stroke({ color: 0xb070ff, width: 2, alpha: 0.95 });
@@ -203,6 +275,7 @@ export class Enemy {
   private drawOverthinker(g: Graphics) {
     const r = this.radius;
     g.circle(0, 0, r + 6).fill({ color: 0x081026, alpha: 0.65 });
+    g.circle(0, 0, r + 9).stroke({ color: 0x6cf0ff, width: 1, alpha: 0.25 });
     g.circle(0, 0, r).stroke({ color: 0x4ba8ff, width: 2, alpha: 0.85 });
     g.circle(0, 0, r * 0.62).fill({ color: 0x090b1a, alpha: 1 }).stroke({ color: 0xb070ff, width: 1.5, alpha: 0.8 });
     for (let i = 0; i < 3; i++) {
@@ -217,6 +290,7 @@ export class Enemy {
     g.circle(0, 0, r + 5).fill({ color: 0x090a0d, alpha: 0.6 });
     g.regularPoly(0, 0, r, 9, 0).fill({ color: 0x171a22, alpha: 1 });
     g.regularPoly(0, 0, r, 9, 0).stroke({ color: 0x8c95a8, width: 1.6, alpha: 0.6 });
+    g.rect(-r * 0.72, -r * 0.72, r * 1.44, r * 1.44).stroke({ color: 0x596274, width: 1, alpha: 0.24 });
     g.circle(0, 0, r * 0.52).fill({ color: 0x262b35, alpha: 0.75 });
     g.moveTo(-r * 0.55, -r * 0.18).lineTo(r * 0.55, -r * 0.18).stroke({ color: 0x596274, width: 1.4, alpha: 0.8 });
     g.moveTo(-r * 0.35, r * 0.25).lineTo(r * 0.35, r * 0.25).stroke({ color: 0x596274, width: 1.2, alpha: 0.55 });
@@ -225,14 +299,20 @@ export class Enemy {
   private drawHpBar() {
     const g = this.hpBar;
     g.clear();
-    if (this.hp >= this.maxHp) return; // hide when full
-    const w = this.radius * 2 + 6;
-    const h = 3;
+    if (this.hp >= this.maxHp && !isBossKind(this.kind)) return; // hide when full except bosses
+    const boss = isBossKind(this.kind);
+    const w = this.radius * (boss ? 2.8 : 2) + 6;
+    const h = boss ? 5 : 3;
     const y = -this.radius - 9;
     const ratio = Math.max(0, this.hp / this.maxHp);
     g.rect(-w / 2, y, w, h).fill({ color: 0x0a0f1a, alpha: 0.85 });
-    g.rect(-w / 2, y, w * ratio, h).fill({ color: ratio > 0.5 ? 0x77ffaa : ratio > 0.25 ? 0xffd166 : 0xff5577, alpha: 1 });
+    g.rect(-w / 2, y, w * ratio, h).fill({ color: boss ? 0xff5577 : ratio > 0.5 ? 0x77ffaa : ratio > 0.25 ? 0xffd166 : 0xff5577, alpha: 1 });
     g.rect(-w / 2, y, w, h).stroke({ color: 0x1a2238, width: 1, alpha: 1 });
+    if (boss) {
+      g.rect(-w / 2, y - 4, w, 1).fill({ color: 0xffd166, alpha: 0.9 });
+      g.circle(-w / 2 - 5, y + h / 2, 3).fill({ color: 0xff5577, alpha: 0.9 });
+      g.circle(w / 2 + 5, y + h / 2, 3).fill({ color: 0xff5577, alpha: 0.9 });
+    }
   }
 
   takeDamage(packet: DamagePacket): { killed: boolean } {
@@ -290,13 +370,10 @@ export class Enemy {
     }
     this.flashTimer = 0.08;
     if (packet.slow !== undefined && Math.random() < 1) {
-      const slow = this.kind === EnemyKind.NumbOne ? 0.86 + packet.slow * 0.14 : packet.slow;
-      const duration = (packet.slowDuration ?? 1) * (this.kind === EnemyKind.NumbOne ? 0.28 : 1);
-      this.applySlow(slow, duration);
+      this.applySlow(packet.slow, packet.slowDuration ?? 1);
     }
     if (packet.fearChance !== undefined && Math.random() < packet.fearChance) {
-      const duration = (packet.stunDuration ?? 0.5) * (this.kind === EnemyKind.NumbOne ? 0.22 : 1);
-      if (duration > 0.04) this.applyStun(duration);
+      this.applyStun(packet.stunDuration ?? 0.5);
     }
     if (this.hp <= 0) {
       this.alive = false;
@@ -323,12 +400,25 @@ export class Enemy {
 
   /** applied slow: enemy speed *= mul for `duration` seconds (only stronger overrides) */
   applySlow(mul: number, duration: number) {
-    if (mul < this.slowMul) this.slowMul = mul;
+    if (duration <= 0) return;
+    const resist = ENEMY_STATS[this.kind].slowResist ?? 0;
+    const resistedMul = 1 - ((1 - mul) * (1 - resist));
+    const effectiveMul = Math.max(this.minSpeedMultiplier(), Math.min(1, resistedMul));
+    if (effectiveMul < this.slowMul) this.slowMul = effectiveMul;
     if (duration > this.slowTimer) this.slowTimer = duration;
   }
 
   applyStun(duration: number) {
-    if (duration > this.stunTimer) this.stunTimer = duration;
+    if (this.stunImmunityTimer > 0) return;
+    const resist = ENEMY_STATS[this.kind].stunResist ?? 0;
+    let effectiveDuration = duration * (1 - resist);
+    if (isBossKind(this.kind)) effectiveDuration = Math.min(0.25, effectiveDuration * 0.25);
+    if (!isBossKind(this.kind) && effectiveDuration <= 0.04) {
+      this.stunImmunityTimer = Math.max(this.stunImmunityTimer, this.stunImmunityDuration());
+      return;
+    }
+    if (effectiveDuration > this.stunTimer) this.stunTimer = effectiveDuration;
+    this.stunImmunityTimer = effectiveDuration + this.stunImmunityDuration();
     this.fearWobble = 1;
   }
 
@@ -337,9 +427,23 @@ export class Enemy {
     if (duration > this.hasteTimer) this.hasteTimer = duration;
   }
 
+  private minSpeedMultiplier(): number {
+    if (isBossKind(this.kind)) return 0.65;
+    if (this.kind === EnemyKind.NumbOne) return 0.75;
+    if (this.kind === EnemyKind.PanicRunner || this.kind === EnemyKind.VoidWraith) return 0.55;
+    return 0.45;
+  }
+
+  private stunImmunityDuration(): number {
+    if (isBossKind(this.kind)) return 5.0;
+    if (this.kind === EnemyKind.NumbOne) return 6.0;
+    if (this.kind === EnemyKind.PanicRunner || this.kind === EnemyKind.VoidWraith) return 2.8;
+    return 2.5;
+  }
+
   /** boss spawns child enemies — Game polls and clears */
   consumeSpawn(dt: number): boolean {
-    if (this.kind !== EnemyKind.Spiral || !this.alive) return false;
+    if (!isBossKind(this.kind) || !this.alive) return false;
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
       this.spawnTimer = 6;
@@ -435,8 +539,12 @@ export class Enemy {
       dodgeOffset = Math.sin((this.dodgeTimer / 0.28) * Math.PI) * 11 * this.dodgeSide;
     }
 
+    if (this.stunImmunityTimer > 0) {
+      this.stunImmunityTimer = Math.max(0, this.stunImmunityTimer - dt);
+    }
+
     if (this.stunTimer > 0) {
-      this.stunTimer -= dt;
+      this.stunTimer = Math.max(0, this.stunTimer - dt);
       // glitch jitter
       this.body.x = (Math.random() - 0.5) * 4;
       this.body.y = (Math.random() - 0.5) * 4;
@@ -447,7 +555,8 @@ export class Enemy {
       this.body.x = -Math.sin(this.angle) * dodgeOffset;
       this.body.y = Math.cos(this.angle) * dodgeOffset;
       const panicMul = this.panicBoostTimer > 0 ? 1.34 : 1;
-      const speed = this.baseSpeed * this.slowMul * this.hasteMul * panicMul;
+      const slowedSpeed = this.baseSpeed * this.slowMul * this.hasteMul * panicMul;
+      const speed = Math.max(this.baseSpeed * this.minSpeedMultiplier(), slowedSpeed);
       this.traveled += speed * dt;
     }
 
@@ -479,16 +588,23 @@ export class Enemy {
     // body rotation
     if (this.kind === EnemyKind.PanicRunner) {
       this.body.rotation = this.angle;
-    } else if (this.kind === EnemyKind.Spiral) {
+      this.body.scale.set(this.panicBoostTimer > 0 ? 1.18 : 1);
+    } else if (isBossKind(this.kind)) {
       this.body.rotation += dt * 1.4;
+      const bossPulse = 1 + Math.sin(t * 3.6) * 0.055;
+      this.body.scale.set(bossPulse);
     } else if (this.kind === EnemyKind.VoidWraith) {
       this.body.rotation += dt * 2.4;
+      this.body.scale.set(0.96 + Math.sin(t * 4.2) * 0.06);
     } else if (this.kind === EnemyKind.Overthinker) {
       this.body.rotation += this.thinkChannelTimer > 0 ? dt * 3.8 : dt * 0.45;
+      this.body.scale.set(this.thinkChannelTimer > 0 ? 1.08 + Math.sin(t * 10) * 0.04 : 1);
     } else if (this.kind === EnemyKind.ShameSwarm) {
       this.body.rotation += dt * 1.8;
+      this.body.scale.set(0.96 + Math.sin(t * 6) * 0.05);
     } else {
       this.body.rotation = Math.sin(t * 3) * 0.15;
+      this.body.scale.set(1);
     }
 
     // damage flash
@@ -512,15 +628,19 @@ export class Enemy {
                         this.panicBoostTimer > 0 ? 0xffd166 : 0xff5577,
                         this.panicBoostTimer > 0 ? 3.2 : 2.5);
       }
-    } else if (this.kind === EnemyKind.Spiral) {
-      if (Math.random() < 0.5) {
+    } else if (isBossKind(this.kind)) {
+      if (Math.random() < 0.38) {
         const a = Math.random() * TAU;
-        const r = this.radius + rand(0, 18);
-        particles.trail(this.x + Math.cos(a) * r, this.y + Math.sin(a) * r, 0xff5577, 2);
+        const r = this.radius + rand(8, 28);
+        particles.trail(this.x + Math.cos(a) * r, this.y + Math.sin(a) * r, Math.random() < 0.25 ? 0xffd166 : 0xff5577, 2.2);
       }
     }
     if (this.kind === EnemyKind.EnvyLeech && Math.random() < 0.28) {
       particles.trail(this.x + rand(-8, 8), this.y + rand(-8, 8), 0x77ffaa, 1.9);
+    } else if (this.kind === EnemyKind.Fractureling && Math.random() < 0.18) {
+      particles.trail(this.x + rand(-8, 8), this.y + rand(-8, 8), Math.random() < 0.5 ? 0x6cf0ff : 0xff77ff, 1.7);
+    } else if (this.kind === EnemyKind.PressureKnot && Math.random() < 0.16) {
+      particles.trail(this.x + rand(-7, 7), this.y + rand(-7, 7), 0xffd166, 1.8);
     } else if (this.kind === EnemyKind.BurnoutBrute && Math.random() < 0.22) {
       particles.trail(this.x + rand(-10, 10), this.y + rand(-10, 10), 0xff5b3a, 2.2);
     } else if (this.kind === EnemyKind.Overthinker && Math.random() < (this.thinkChannelTimer > 0 ? 0.48 : 0.18)) {
@@ -545,6 +665,8 @@ export class Enemy {
     const colorMap: Record<EnemyKind, number> = {
       [EnemyKind.Doubtling]: 0xb070ff,
       [EnemyKind.PanicRunner]: 0xff5577,
+      [EnemyKind.Fractureling]: 0x6cf0ff,
+      [EnemyKind.PressureKnot]: 0xffd166,
       [EnemyKind.GuiltGiant]: 0xffd166,
       [EnemyKind.ShameSwarm]: 0xff77ff,
       [EnemyKind.EnvyLeech]: 0x77ffaa,
@@ -552,20 +674,26 @@ export class Enemy {
       [EnemyKind.VoidWraith]: 0xb070ff,
       [EnemyKind.Overthinker]: 0x6cf0ff,
       [EnemyKind.NumbOne]: 0x8c95a8,
-      [EnemyKind.Spiral]: 0xff5577
+      [EnemyKind.Spiral]: 0xff5577,
+      [EnemyKind.Mask]: 0xff77ff,
+      [EnemyKind.BurnoutBoss]: 0xff5b3a
     };
     const c = colorMap[this.kind];
-    const count = this.kind === EnemyKind.Spiral ? 60 : this.kind === EnemyKind.GuiltGiant ? 26 : 14;
+    const count = isBossKind(this.kind) ? 60 : this.kind === EnemyKind.GuiltGiant ? 26 : 14;
     particles.burst(this.x, this.y, {
       count, color: c,
       speedMin: 60, speedMax: 220,
       sizeMin: 1.5, sizeMax: 3.5,
       lifeMin: 0.4, lifeMax: 0.9,
-      drag: 2.5, shape: this.kind === EnemyKind.ShameSwarm ? 'shard' : 'circle'
+      drag: 2.5, shape: this.kind === EnemyKind.ShameSwarm ? 'shard' : 'circle',
+      visualKind: 'death',
+      important: isBossKind(this.kind)
     });
     particles.ring(this.x, this.y, {
       color: c, startRadius: this.radius, endRadius: this.radius + 40,
-      duration: 0.4, thickness: 2
+      duration: 0.4, thickness: 2,
+      visualKind: 'death',
+      important: isBossKind(this.kind)
     });
   }
 

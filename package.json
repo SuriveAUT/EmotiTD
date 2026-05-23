@@ -1,12 +1,13 @@
 {
   "name": "emoticore-td",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.4-alpha",
   "type": "module",
   "description": "EMOTICORE TD — emotional tower defense in WebGL",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "deploy:server": "powershell -ExecutionPolicy Bypass -File tools/deploy-server.ps1",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
